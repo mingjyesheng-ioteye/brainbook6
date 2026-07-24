@@ -318,6 +318,14 @@ function rebuildSingleModule(options) {
         shell: true,
       });
     }
+
+    const workspaceModuleRoot = fs.realpathSync(path.join(projectRoot, 'node_modules', moduleName));
+    if (workspaceModuleRoot !== fs.realpathSync(moduleRoot)) {
+      const workspaceBuildDir = path.join(workspaceModuleRoot, 'build');
+      if (fs.existsSync(workspaceBuildDir)) {
+        fs.cpSync(workspaceBuildDir, path.join(moduleRoot, 'build'), { recursive: true, force: true });
+      }
+    }
     return true;
   } catch (error) {
     console.error(`❌ Failed to rebuild ${moduleName}:`, error.message);
