@@ -235,9 +235,8 @@ function rebuildSingleModule(options) {
   if (!forceRebuild || mustUsePrebuild) {
     try {
       env.npm_config_build_from_source = 'false';
+      const prebuildInstallBin = require.resolve('prebuild-install/bin.js');
       const prebuildArgs = [
-        '--yes',
-        'prebuild-install',
         '--runtime=electron',
         `--target=${electronVersion}`,
         `--platform=${platform}`,
@@ -246,8 +245,8 @@ function rebuildSingleModule(options) {
       ];
 
       const fullCmd = cmdPrefix
-        ? `${cmdPrefix} ${bunxCmd} ${prebuildArgs.join(' ')}`
-        : `${bunxCmd} ${prebuildArgs.join(' ')}`;
+        ? `${cmdPrefix} ${JSON.stringify(process.execPath)} ${JSON.stringify(prebuildInstallBin)} ${prebuildArgs.join(' ')}`
+        : `${JSON.stringify(process.execPath)} ${JSON.stringify(prebuildInstallBin)} ${prebuildArgs.join(' ')}`;
       console.log(`     Running: ${fullCmd}`);
 
       if (useShell) {
@@ -258,11 +257,10 @@ function rebuildSingleModule(options) {
           shell: true,
         });
       } else {
-        execFileSync(bunxCmd, prebuildArgs, {
+        execFileSync(process.execPath, [prebuildInstallBin, ...prebuildArgs], {
           cwd: moduleRoot,
           env,
           stdio: 'inherit',
-          shell: true,
         });
       }
 
@@ -288,19 +286,19 @@ function rebuildSingleModule(options) {
 
   try {
     env.npm_config_build_from_source = 'true';
+    const electronRebuildCli = path.join(path.dirname(require.resolve('@electron/rebuild')), 'cli.js');
     const rebuildArgs = [
-      '--yes',
-      'electron-rebuild',
       '--only',
       moduleName,
       '--force',
-      `--platform=${platform}`,
       `--arch=${targetArch}`,
+      `--version=${electronVersion}`,
+      `--module-dir=${projectRoot}`,
     ];
 
     const fullCmd = cmdPrefix
-      ? `${cmdPrefix} ${bunxCmd} ${rebuildArgs.join(' ')}`
-      : `${bunxCmd} ${rebuildArgs.join(' ')}`;
+      ? `${cmdPrefix} ${JSON.stringify(process.execPath)} ${JSON.stringify(electronRebuildCli)} ${rebuildArgs.join(' ')}`
+      : `${JSON.stringify(process.execPath)} ${JSON.stringify(electronRebuildCli)} ${rebuildArgs.join(' ')}`;
     console.log(`     Running: ${fullCmd}`);
 
     if (useShell) {
@@ -311,11 +309,10 @@ function rebuildSingleModule(options) {
         shell: true,
       });
     } else {
-      execFileSync(bunxCmd, rebuildArgs, {
+      execFileSync(process.execPath, [electronRebuildCli, ...rebuildArgs], {
         cwd: projectRoot,
         env,
         stdio: 'inherit',
-        shell: true,
       });
     }
 
