@@ -1,12 +1,12 @@
-appId: com.aionui.app
-productName: AionUi
-executableName: AionUi
-copyright: Copyright © 2024 AionUi
+appId: com.brainbook.app
+productName: BrainBook
+executableName: BrainBook
+copyright: Copyright © 2024 BrainBook
 
 protocols:
-  - name: AionUi Protocol
+  - name: BrainBook Protocol
     schemes:
-      - aionui
+      - brainbook
 
 asar:
   smartUnpack: true
@@ -169,17 +169,17 @@ linux:
   icon: resources/app.png
   artifactName: ${productName}-${version}-${os}-${arch}.${ext}
   category: Utility
-  maintainer: aionui
-  vendor: aionui
+  maintainer: brainbook
+  vendor: brainbook
   synopsis: ${description}
   description: ${description}
   desktop:
     entry:
-      Name: AionUi
+      Name: BrainBook
       Comment: ${description}
-      Icon: AionUi
+      Icon: BrainBook
       Categories: Office;Utility;
-      MimeType: x-scheme-handler/aionui;
+      MimeType: x-scheme-handler/brainbook;
 
 npmRebuild: false
 buildDependenciesFromSource: false
@@ -218,6 +218,6 @@ electronDownload:
 publish:
   provider: github
   owner: iOfficeAI
-  repo: AionUi
+  repo: brainbook
   publishAutoUpdate: true
   releaseType: release
