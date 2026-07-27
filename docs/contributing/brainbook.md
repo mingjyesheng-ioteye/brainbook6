@@ -93,7 +93,7 @@ bun run --filter @aionui/web-cli build
 #    Example: packages/web-cli/bundled-aioncore/win-x64/aioncore.exe
 
 # 5. Copy renderer static assets
-Copy-Item -Recurse -Force out/renderer/* packages/web-cli/static/
+Copy-Item -Recurse -Force packages/desktop/out/renderer/* packages/web-cli/static/
 ```
 
 ### Run (Dev Mode)
@@ -172,13 +172,131 @@ xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
 
 Or use the desktop app with `--webui --remote --no-sandbox` for the same effect.
 
-sample commands for aionui-web.exe
-start web server
+## Build aionui-web-host (Standalone Web Server Package)
+
+`@aionui/web-host` is the lower-level package that `web-cli` wraps. Use it directly when you need custom orchestration (e.g., Docker entrypoint, Kubernetes init container, or integrating with another Node.js service).
+
+### Build
+
+```powershell
+# Build the web-host package
+bun run --filter @aionui/web-host build
+
+# Build the renderer assets (required at runtime)
+bun run build
+```
+
+### Run via Node/Bun
+
+```powershell
+# Example: standalone Node.js script
+node start-webhost.js
+
+# start-webhost.js contents:
+# import { startWebHost } from '@aionui/web-host';
+# const handle = await startWebHost({
+#   app: { version: '2.1.41', isPackaged: true, resourcesPath: '.', userDataPath: 'C:\\data\\brainbook' },
+#   staticDir: 'C:\\src\\brainbook\\out\\renderer',
+#   port: 25808,
+#   allowRemote: true,
+#   dataDir: 'C:\\data\\brainbook',
+#   logDir: 'C:\\data\\brainbook\\logs',
+#   dirs: { cacheDir: 'C:\\data\\brainbook', workDir: 'C:\\data\\brainbook', logDir: 'C:\\data\\brainbook\\logs' },
+#   backend: { kind: 'ownBackend', resolveBackend: () => 'C:\\tools\\aioncore.exe' }
+# });
+# console.log('WebUI ready:', handle.url);
+# await new Promise(() => {}); // keep alive
+```
+
+### Node.js API
+
+```typescript
+import { startWebHost, startStaticServer, startBackend, stopBackend } from '@aionui/web-host';
+
+// Option A: Full web host (backend + static server)
+const handle = await startWebHost({
+  app: { version: '2.1.41', isPackaged: false, resourcesPath: '.', userDataPath: '.' },
+  staticDir: './out/renderer',
+  port: 25808,
+  allowRemote: false,
+  dataDir: './data',
+  logDir: './logs',
+  dirs: { cacheDir: './data', workDir: './data', logDir: './logs' },
+  backend: {
+    kind: 'ownBackend',
+    resolveBackend: () => './aioncore.exe',
+  },
+});
+
+// Option B: Static server only (no backend — API calls will 502)
+const staticHandle = await startStaticServer({
+  staticDir: './out/renderer',
+  backendPort: 0, // invalid port
+  port: 3000,
+  allowRemote: true,
+});
+
+// Stop
+await handle.stop();
+await staticHandle.stop();
+```
+
+### Key Behaviors
+
+- **Static server** serves SPA assets and reverse-proxies `/api/*`, `/login`, `/logout` to backend
+- **WebSocket** and **STT streaming** connections are TCP-spliced to backend at the raw socket level
+- **Backend** auto-starts, waits for `/health` to return 200, then the web host becomes ready
+- **Data dir** stores SQLite DB, logs, and agent session state
+- **Remote binding** uses `0.0.0.0` when `allowRemote: true`, `127.0.0.1` otherwise
+
+### Configuration
+
+Same as web-cli — flags accepted by `startWebHost` or via constructor options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `port` | 25808 | Static server listen port |
+| `allowRemote` | false | Bind 0.0.0.0 |
+| `dataDir` | required | SQLite + logs |
+| `logDir` | dataDir/logs | Log directory |
+| `dirs` | required | `cacheDir`, `workDir`, `logDir` for backend env |
+| `backend.kind` | `'ownBackend'` | `'ownBackend'` or `'useExistingBackend'` |
+| `backend.resolveBackend` | required for own | Returns path to aioncore binary |
+| `backend.port` | required for useExisting | Port where external backend listens |
+
+### Dockerfile Example
+
+```dockerfile
+FROM oven/bun:1 AS builder
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run --filter @aionui/web-host build
+RUN bun run build
+
+FROM oven/bun:1-alpine
+RUN apk add --no-cache xvfb
+COPY --from=builder /app/packages/web-host/dist ./packages/web-host/dist
+COPY --from=builder /app/packages/web-cli/bin ./packages/web-cli/bin
+COPY --from=builder /app/packages/desktop/out/renderer ./static
+COPY --from=builder /app/external/aioncore ./aioncore
+WORKDIR /app
+EXPOSE 25808
+ENTRYPOINT ["bun", "run", "packages/web-host/dist/index.js"]
+CMD ["start", "--remote"]
+```
+
+## Quick Reference: aionui-web.exe Commands
+
+### Start Web Server
+
 ```powershell
 .\aionui-web.exe start --remote --static-dir ./out/renderer --backend-bin ./out/aioncore.exe
 ```
 
-reset password for admin
+### Reset Admin Password
+
 ```powershell
 .\aionui-web.exe resetpass --static-dir ./out/renderer --backend-bin ./out/aioncore.exe
 ```
