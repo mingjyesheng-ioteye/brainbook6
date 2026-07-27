@@ -220,3 +220,6 @@ graphify-out/
 
 # Local scratch/analysis (wireframes, candidate mockups)
 .analysis/
+
+aionui-web.exe
+.opencode/

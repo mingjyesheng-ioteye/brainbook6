@@ -93,7 +93,7 @@ bun run --filter @aionui/web-cli build
 #    Example: packages/web-cli/bundled-aioncore/win-x64/aioncore.exe
 
 # 5. Copy renderer static assets
-Copy-Item -Recurse -Force packages/desktop/out/renderer/* packages/web-cli/static/
+Copy-Item -Recurse -Force out/renderer/* packages/web-cli/static/
 ```
 
 ### Run (Dev Mode)
@@ -171,3 +171,14 @@ xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
 ```
 
 Or use the desktop app with `--webui --remote --no-sandbox` for the same effect.
+
+sample commands for aionui-web.exe
+start web server
+```powershell
+.\aionui-web.exe start --remote --static-dir ./out/renderer --backend-bin ./out/aioncore.exe
+```
+
+reset password for admin
+```powershell
+.\aionui-web.exe resetpass --static-dir ./out/renderer --backend-bin ./out/aioncore.exe
+```
