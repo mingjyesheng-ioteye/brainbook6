@@ -69,7 +69,7 @@ Use `--force-with-lease`, not `--force`, because rebasing changes commit IDs whi
 
 ## Build aionui-web (Standalone Web CLI)
 
-The `@aionui/web-cli` package runs the full app without Electron — spawns AionCore backend + serves SPA assets via a Node.js web server.
+`@aionui/web-cli` is the CLI entry point that produces `aionui-web.exe`. It depends on `@aionui/web-host` (the library) for backend spawning and static serving.
 
 ### Prerequisites
 
@@ -172,9 +172,17 @@ xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
 
 Or use the desktop app with `--webui --remote --no-sandbox` for the same effect.
 
-## Build aionui-web-host (Standalone Web Server Package)
+## Build aionui-web-host (Library Package)
 
-`@aionui/web-host` is the lower-level package that `web-cli` wraps. Use it directly when you need custom orchestration (e.g., Docker entrypoint, Kubernetes init container, or integrating with another Node.js service).
+`@aionui/web-host` is the underlying library that `web-cli` depends on. It has **no `bin` field** and does not produce a standalone executable. It builds to `dist/index.js` and is consumed by `web-cli`.
+
+**Package relationship:**
+```
+@aionui/web-cli (has bin → produces aionui-web.exe)
+  └── depends on @aionui/web-host (library, no bin)
+```
+
+Use `web-host` directly only when building custom orchestration (Docker entrypoint, Kubernetes init container, or integrating with another Node.js service).
 
 ### Build
 
@@ -267,23 +275,17 @@ Same as web-cli — flags accepted by `startWebHost` or via constructor options:
 ### Dockerfile Example
 
 ```dockerfile
-FROM oven/bun:1 AS builder
-WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
-COPY . .
-RUN bun run --filter @aionui/web-host build
-RUN bun run build
-
 FROM oven/bun:1-alpine
 RUN apk add --no-cache xvfb
-COPY --from=builder /app/packages/web-host/dist ./packages/web-host/dist
+# web-cli has the bin; web-host is its transitive dependency
+COPY --from=builder /app/node_modules/@aionui/web-host/dist ./node_modules/@aionui/web-host/dist
+COPY --from=builder /app/packages/web-cli/dist ./packages/web-cli/dist
 COPY --from=builder /app/packages/web-cli/bin ./packages/web-cli/bin
 COPY --from=builder /app/packages/desktop/out/renderer ./static
 COPY --from=builder /app/external/aioncore ./aioncore
 WORKDIR /app
 EXPOSE 25808
-ENTRYPOINT ["bun", "run", "packages/web-host/dist/index.js"]
+ENTRYPOINT ["bun", "run", "packages/web-cli/dist/index.js"]
 CMD ["start", "--remote"]
 ```
 
