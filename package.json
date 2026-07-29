@@ -72,7 +72,8 @@
     "test:smoke:installer:rstrtmgr-ui": "node scripts/smoke-installer-rstrtmgr-ui.js",
     "prepare": "husky",
     "postinstall": "node scripts/postinstall.js",
-    "test:bun": "bun test packages/desktop/src/process/services/database/drivers/*.bun.test.ts"
+    "test:bun": "bun test packages/desktop/src/process/services/database/drivers/*.bun.test.ts",
+    "prepare:bundle": "node scripts/prepareLocalBundle.js"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",
