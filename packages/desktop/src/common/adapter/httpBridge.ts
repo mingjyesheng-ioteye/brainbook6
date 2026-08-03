@@ -320,10 +320,15 @@ export function httpDelete<Data, Params = undefined>(
  * Returns a sensible default value and logs a warning.
  */
 export function stubProvider<Data, Params = undefined>(name: string, defaultValue: Data): ProviderLike<Data, Params> {
+  const warnedStubs = ((globalThis as { __aionuiWarnedStubs?: Set<string> }).__aionuiWarnedStubs ??=
+    new Set<string>());
   return {
     provider: () => {},
     invoke: (async (_params?: Params) => {
-      console.warn(`[httpBridge] stub: ${name} not yet implemented in backend`);
+      if (!warnedStubs.has(name)) {
+        warnedStubs.add(name);
+        console.warn(`[httpBridge] stub: ${name} not yet implemented in backend`);
+      }
       return defaultValue;
     }) as ProviderLike<Data, Params>['invoke'],
   };
