@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <strong>💬 Community:</strong> <a href="https://discord.gg/2QAwJn7Egx" target="_blank">Discord (English)</a> | <a href="./resources/wx-17.png" target="_blank">微信 (中文群)</a> | <a href="https://twitter.com/AionUI" target="_blank">Twitter</a>
+  <strong>💬 Community:</strong> <a href="https://discord.gg/2QAwJn7Egx" target="_blank">Discord (English)</a> | <a href="./resources/wx-18.png" target="_blank">微信 (中文群)</a> | <a href="https://twitter.com/AionUI" target="_blank">Twitter</a>
 </p>
 
 ---
@@ -54,7 +54,7 @@
 </h3>
 
 <p align="center">
-  <sub><strong>Kimi K3</strong> is here and works out of the box in AionUi — <a href="https://www.kimi.com/code?aff=aionui" target="_blank">get a Kimi For Coding plan</a> or an API key (<a href="https://platform.kimi.ai?aff=aionui" target="_blank">Global</a> / <a href="https://platform.kimi.com?aff=aionui" target="_blank">China</a>) · ready to claim? <a href="https://github.com/iOfficeAI/AionUi/discussions/3640">comment here</a></sub>
+  <sub><strong>Kimi K3</strong> is here and works out of the box in AionUi — <a href="https://www.kimi.com/code?aff=aionui" target="_blank">get a Kimi For Coding plan</a> or an API key (<a href="https://platform.kimi.ai?track_id=track-32e04532b08d460fac729191744fa75c&aff=aionui" target="_blank">Global</a> / <a href="https://platform.kimi.com?track_id=track-98f92981df1c4c61b2c68930ba3ab658&aff=aionui" target="_blank">China</a>) · ready to claim? <a href="https://github.com/iOfficeAI/AionUi/discussions/3640">comment here</a></sub>
 </p>
 
 ---
@@ -368,7 +368,6 @@ _10+ formats: PDF, Word, Excel, PPT, code, Markdown, images, HTML, Diff — view
 - **Instant Preview** — after the agent generates files, view results immediately without switching apps
 - **Real-time Tracking + Editable** — automatically tracks file changes; supports live editing of Markdown, code, HTML
 - **Multi-Tab Support** — open multiple files simultaneously, each in its own tab
-- **Version History** — view and restore historical versions of files (Git-based)
 
 <p align="center">
   <img src="./resources/preview.gif" alt="Preview Panel" width="800">
@@ -696,7 +695,7 @@ brew install aionui
 - [Report Issues](https://github.com/iOfficeAI/AionUi/issues) — bugs and feature requests
 - [Release Updates](https://github.com/iOfficeAI/AionUi/releases) — get the latest version
 - [Discord Community](https://discord.gg/2QAwJn7Egx) — English community
-- [WeChat Group](./resources/wx-17.png) — Chinese community
+- [WeChat Group](./resources/wx-18.png) — Chinese community
 
 ### Contributing
 
