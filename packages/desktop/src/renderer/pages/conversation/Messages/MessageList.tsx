@@ -14,7 +14,9 @@ import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/
 import { Image } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
+import MessageQuestion from './MessageQuestion';
 import MessagePermission from './components/MessagePermission';
+import MessageAcpTerminalOutput from '@renderer/pages/conversation/Messages/acp/MessageAcpTerminalOutput';
 import MessageAcpToolCall from '@renderer/pages/conversation/Messages/acp/MessageAcpToolCall';
 import classNames from 'classnames';
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -288,8 +290,12 @@ const MessageItem: React.FC<{
           return <MessagePermission message={message}></MessagePermission>;
         case 'acp_permission':
           return <MessageAcpPermission message={message}></MessageAcpPermission>;
+        case 'ask':
+          return <MessageQuestion message={message}></MessageQuestion>;
         case 'acp_tool_call':
           return <MessageAcpToolCall message={message}></MessageAcpToolCall>;
+        case 'acp_terminal_output':
+          return <MessageAcpTerminalOutput message={message}></MessageAcpTerminalOutput>;
         case 'plan':
           return <MessagePlan message={message}></MessagePlan>;
         case 'thinking':
