@@ -23,6 +23,7 @@ import {
   subscribeUpdateReadyState,
   type UpdateReadyState,
 } from '@/renderer/components/settings/updateReadyState';
+import { redirectUpdateToBrainbookInstall } from '@/renderer/brainbook/updateRedirect';
 
 // __APP_VERSION__ is injected by electron.vite.config.ts `define:` from the
 // repo-root package.json. The previous `import packageJson from
@@ -86,6 +87,8 @@ const AboutModalContent: React.FC = () => {
       });
       return;
     }
+
+    if (await redirectUpdateToBrainbookInstall()) return;
 
     if (checking) return;
     setChecking(true);
