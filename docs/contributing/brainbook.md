@@ -13,6 +13,19 @@ $env:AIONUI_BACKEND_LOCAL_BINARY = "$HOME\.cargo\bin\aioncore.exe"
 bun run build-win
 ```
 
+The AionCore repository `.env` may define the public
+`BRAINBOOK_SUPABASE_URL` and `BRAINBOOK_SUPABASE_ANON_KEY` values. The
+`aionui-brainbook` build script embeds those two values during `cargo install`;
+explicit PowerShell environment variables take precedence. Cargo does not load
+`.env` by itself, so use an AionCore revision containing that build script.
+
+For desktop development, close the running desktop/backend process before
+reinstalling, then restart it so PATH resolution loads the replaced
+`$HOME\.cargo\bin\aioncore.exe`. A running process continues using the old
+binary even after the file is replaced. Packaged desktop builds prefer their
+bundled backend and must be rebuilt with `AIONUI_BACKEND_LOCAL_BINARY` as shown
+above.
+
 After preparation, `resources/bundled-aioncore/win32-x64/manifest.json` should contain `"sourceType": "local-binary"`. If the variable is not set, the build continues to use the configured release binary.
 
 ## Sync with the Parent Repository
