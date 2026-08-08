@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
+import { BRAINBOOK_ACCESS_CHANGED_EVENT } from '@/renderer/services/brainbook/brainbookApi';
 import SkillUsedByStack, { getAssistantsUsingSkill } from './SkillUsedByStack';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import SettingsPageHeader from '../components/SettingsPageHeader';
@@ -219,6 +220,14 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
 
   useEffect(() => {
     void fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const refreshForBrainbookAccess = () => {
+      void fetchData();
+    };
+    window.addEventListener(BRAINBOOK_ACCESS_CHANGED_EVENT, refreshForBrainbookAccess);
+    return () => window.removeEventListener(BRAINBOOK_ACCESS_CHANGED_EVENT, refreshForBrainbookAccess);
   }, [fetchData]);
 
   // When deep-linked to a specific skill, open the tab that actually contains it

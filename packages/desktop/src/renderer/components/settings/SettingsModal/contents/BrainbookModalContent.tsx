@@ -6,7 +6,7 @@
 
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { useBrainbookAccount } from '@/renderer/hooks/brainbook/useBrainbookAccount';
-import { Button, Input, Message, Spin, Switch, Typography } from '@arco-design/web-react';
+import { Button, Input, Message, Modal, Spin, Switch, Typography } from '@arco-design/web-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
@@ -70,6 +70,21 @@ const BrainbookModalContent: React.FC = () => {
       await syncNow();
       Message.success(t('settings.brainbookBackfillQueued'));
     } catch (error) {
+      const message = getErrorMessage(error);
+      if (message.includes('BRAINBOOK_ACCOUNT_SWITCH_CONFIRMATION_REQUIRED')) {
+        Modal.confirm({
+          title: t('settings.brainbookConfirmAccountSwitchTitle', { defaultValue: 'Confirm account switch' }),
+          content: t('settings.brainbookConfirmAccountSwitch', {
+            defaultValue:
+              'Previously synced conversations remain with their original account. Continue and sync only unowned conversations?',
+          }),
+          onOk: async () => {
+            await syncNow(true);
+            Message.success(t('settings.brainbookBackfillQueued'));
+          },
+        });
+        return;
+      }
       Message.error(getErrorMessage(error));
     }
   };
@@ -94,7 +109,9 @@ const BrainbookModalContent: React.FC = () => {
       ) : null}
 
       {!loading && status && !status.configured ? (
-        <Typography.Paragraph className='m-0 text-orange-500'>{t('settings.brainbookNotConfigured')}</Typography.Paragraph>
+        <Typography.Paragraph className='m-0 text-orange-500'>
+          {t('settings.brainbookNotConfigured')}
+        </Typography.Paragraph>
       ) : null}
 
       {!loading && status?.configured && !status.signed_in ? (
@@ -141,7 +158,9 @@ const BrainbookModalContent: React.FC = () => {
           <Typography.Text className='text-t-secondary'>
             {t('settings.brainbookPendingCount', { count: status.pending_count })}
           </Typography.Text>
-          <Typography.Text className='text-t-secondary'>{t('settings.brainbookLastSync', { time: lastSync })}</Typography.Text>
+          <Typography.Text className='text-t-secondary'>
+            {t('settings.brainbookLastSync', { time: lastSync })}
+          </Typography.Text>
 
           <div className='flex items-center gap-8px'>
             <Button disabled={busy || !status.sync_enabled} onClick={() => void handleSyncNow()}>
