@@ -11,6 +11,7 @@ import { ConfigProvider } from '@arco-design/web-react';
 import { MemoryRouter } from 'react-router-dom';
 import AssistantSettings from '@/renderer/pages/settings/AssistantSettings';
 import EnabledAssistantsList from '@/renderer/pages/settings/AssistantSettings/home/EnabledAssistantsList';
+import OfficialAssistantsGrid from '@/renderer/pages/settings/AssistantSettings/home/OfficialAssistantsGrid';
 import type { AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
 
 const useAssistantListMock = vi.fn();
@@ -231,6 +232,47 @@ describe('AssistantSettings', () => {
     // Each enabled row exposes an enable switch so users can disable in place.
     expect(screen.getByTestId('switch-enabled-official')).toBeInTheDocument();
     expect(screen.getByTestId('switch-enabled-cli')).toBeInTheDocument();
+  });
+
+  it('separates BrainBook agents from AionUI built-ins', () => {
+    const assistants = [
+      { id: 'cowork', name: 'Cowork', sort_order: 1, source: 'builtin', enabled: true },
+      { id: 'springboard', name: 'Springboard', sort_order: 1000, source: 'builtin', enabled: true },
+    ] as AssistantListItem[];
+
+    render(
+      <ConfigProvider>
+        <OfficialAssistantsGrid
+          assistants={assistants}
+          localeKey='en-US'
+          onOpenSettings={vi.fn()}
+          onDuplicate={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          onStartChat={vi.fn()}
+        />
+      </ConfigProvider>
+    );
+
+    expect(screen.getByTestId('brainbook-agents-section')).toHaveTextContent('Springboard');
+    expect(screen.getByTestId('aionui-agents-section')).toHaveTextContent('Cowork');
+  });
+
+  it('does not render a BrainBook section when access filtering returns only parent agents', () => {
+    render(
+      <ConfigProvider>
+        <OfficialAssistantsGrid
+          assistants={[{ id: 'cowork', name: 'Cowork', sort_order: 1, source: 'builtin' } as AssistantListItem]}
+          localeKey='en-US'
+          onOpenSettings={vi.fn()}
+          onDuplicate={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          onStartChat={vi.fn()}
+        />
+      </ConfigProvider>
+    );
+
+    expect(screen.queryByTestId('brainbook-agents-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('aionui-agents-section')).toHaveTextContent('Cowork');
   });
 
   it('disables enabled-assistant dragging while search is active', () => {

@@ -14,6 +14,20 @@ const rootPackageJson = JSON.parse(readFileSync(resolve(__dirname, '../../packag
   version: string;
 };
 
+const resolveGitRevision = (environmentName: string, revision: string): string => {
+  const configured = process.env[environmentName]?.trim();
+  if (configured) return configured;
+
+  try {
+    return execSync(`git rev-parse --short=12 ${revision}`, { encoding: 'utf-8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+};
+
+const aionUiParentRevision = resolveGitRevision('BRAINBOOK_AIONUI_PARENT_REVISION', 'upstream/main');
+const aionCoreParentRevision = process.env.BRAINBOOK_AIONCORE_PARENT_REVISION?.trim() || 'unknown';
+
 // Build builtin MCP servers after main process bundle so they survive out/main/ cleanup.
 function buildMcpServersPlugin() {
   return {
@@ -306,6 +320,8 @@ export default defineConfig(({ mode }) => {
         // can show it without importing packages/desktop/package.json, which is
         // a workspace-internal placeholder frozen at "0.0.0".
         __APP_VERSION__: JSON.stringify(rootPackageJson.version),
+        __AIONUI_PARENT_REVISION__: JSON.stringify(aionUiParentRevision),
+        __AIONCORE_PARENT_REVISION__: JSON.stringify(aionCoreParentRevision),
         // Renderer-side discontinued-build flag; consumed via discontinuedBuild.ts.
         __IS_DISCONTINUED_BUILD__: JSON.stringify(process.env.IS_DISCONTINUED_BUILD === 'true'),
         global: 'globalThis',

@@ -131,6 +131,56 @@ describe('SkillsHubSettings', () => {
     expect(element.type).toBe(SkillsHubSettings);
   });
 
+  it('separates BrainBook skills from AionUI built-ins', async () => {
+    mocks.listAvailableSkills.mockResolvedValue([
+      {
+        name: 'cron',
+        description: 'Parent skill',
+        location: '/builtin/cron',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+      {
+        name: 'gstack',
+        description: 'BrainBook skill',
+        location: '/runtime/gstack',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+    ]);
+
+    render(<SkillsHubSettings withWrapper={false} />);
+
+    await waitFor(() => expect(mocks.listAvailableSkills).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('Official'));
+
+    expect(await screen.findByTestId('brainbook-skills-section')).toHaveTextContent('gstack');
+    expect(screen.getByTestId('aionui-platform-skills-list')).toHaveTextContent('cron');
+  });
+
+  it('does not render a BrainBook section when access filtering returns only parent skills', async () => {
+    mocks.listAvailableSkills.mockResolvedValue([
+      {
+        name: 'cron',
+        description: 'Parent skill',
+        location: '/builtin/cron',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+    ]);
+
+    render(<SkillsHubSettings withWrapper={false} />);
+
+    await waitFor(() => expect(mocks.listAvailableSkills).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('Official'));
+
+    expect(screen.queryByTestId('brainbook-skills-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('aionui-platform-skills-list')).toHaveTextContent('cron');
+  });
+
   it('shows backend import failure detail for manual imports', async () => {
     mocks.showOpen.mockResolvedValue(['/tmp/huge-skill']);
     mocks.importSkills.mockRejectedValue(

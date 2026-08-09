@@ -19,3 +19,7 @@ declare module '*?raw' {
 }
 
 declare module 'unocss';
+
+declare const __APP_VERSION__: string;
+declare const __AIONUI_PARENT_REVISION__: string;
+declare const __AIONCORE_PARENT_REVISION__: string;

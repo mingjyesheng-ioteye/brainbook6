@@ -68,6 +68,8 @@ import { setUpdateReadyState } from '@/renderer/components/settings/updateReadyS
 describe('AboutModalContent update ready state', () => {
   beforeEach(() => {
     vi.stubGlobal('__APP_VERSION__', '2.1.13');
+    vi.stubGlobal('__AIONUI_PARENT_REVISION__', 'aionui-parent');
+    vi.stubGlobal('__AIONCORE_PARENT_REVISION__', 'aioncore-parent');
     mocks.quitAndInstallMock.mockResolvedValue(undefined);
     mocks.autoUpdateCheckMock.mockResolvedValue({ success: true });
     mocks.updateCheckMock.mockResolvedValue({
@@ -86,6 +88,9 @@ describe('AboutModalContent update ready state', () => {
   it('replaces check update with ready-to-install when an update package is ready', async () => {
     render(<AboutModalContent />);
 
+    expect(screen.getByText('BrainBook')).toBeInTheDocument();
+    expect(screen.getByText('AionUI @ aionui-parent')).toBeInTheDocument();
+    expect(screen.getByText('AionCore @ aioncore-parent')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'settings.checkForUpdates' })).toBeInTheDocument();
 
     await act(async () => {

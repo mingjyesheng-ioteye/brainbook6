@@ -14,6 +14,7 @@ import SettingsPageHeader from '../components/SettingsPageHeader';
 import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
 import { AionSearchInput } from '@/renderer/components/base';
 import { buildSkillImportNotice, getSkillImportErrorMessage } from './skillImportMessages';
+import { BRAINBOOK_BRAND, isBrainbookSkillId, partitionBrainbookAssets } from '@/renderer/brainbook/brand';
 
 // Skill 信息类型 / Skill info type
 interface SkillInfo {
@@ -177,6 +178,10 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
     () => availableSkills.filter((s) => s.source === 'builtin' && !s.is_auto_inject),
     [availableSkills]
   );
+  const officialSkillGroups = useMemo(
+    () => partitionBrainbookAssets(officialSkills, (skill) => skill.name, isBrainbookSkillId),
+    [officialSkills]
+  );
   const builtinAutoSkills = useMemo(() => availableSkills.filter(isAutoInjectedBuiltinSkill), [availableSkills]);
   const extensionSkills = useMemo(() => availableSkills.filter((s) => s.source === 'extension'), [availableSkills]);
   const importHistoryGroups = useMemo(() => buildImportHistoryGroups(importHistory), [importHistory]);
@@ -195,7 +200,14 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
   );
 
   const filteredSkills = useMemo(() => matchesQuery(mySkills), [matchesQuery, mySkills]);
-  const filteredOfficialSkills = useMemo(() => matchesQuery(officialSkills), [matchesQuery, officialSkills]);
+  const filteredBrainbookSkills = useMemo(
+    () => matchesQuery(officialSkillGroups.brainbook),
+    [matchesQuery, officialSkillGroups.brainbook]
+  );
+  const filteredPlatformSkills = useMemo(
+    () => matchesQuery(officialSkillGroups.platform),
+    [matchesQuery, officialSkillGroups.platform]
+  );
   const filteredExtensionSkills = useMemo(() => matchesQuery(extensionSkills), [matchesQuery, extensionSkills]);
   const filteredAutoSkills = useMemo(() => matchesQuery(builtinAutoSkills), [matchesQuery, builtinAutoSkills]);
 
@@ -709,6 +721,26 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
     />
   );
 
+  const officialSkillSection = (testId: string, productName: string, skills: SkillInfo[], filtered: SkillInfo[]) =>
+    skills.length > 0 ? (
+      <section data-testid={testId}>
+        <div className='mb-12px text-14px font-bold text-t-primary'>
+          {productName} {t('settings.skills', { defaultValue: 'Skills' })}
+        </div>
+        <div className='flex flex-col gap-8px rounded-12px border border-border-2 bg-2 p-8px md:rounded-16px md:p-10px'>
+          {filtered.length > 0 ? (
+            filtered.map((skill) =>
+              renderReadonlySkillCard(skill, 'official', `official-skill-card-${normalizeTestId(skill.name)}`)
+            )
+          ) : (
+            <div className='text-center text-t-secondary text-13px py-32px bg-fill-1 rd-12px border border-border-2 border-dashed'>
+              {t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills.' })}
+            </div>
+          )}
+        </div>
+      </section>
+    ) : null;
+
   // Read-only section wrapper (extension / auto-injected) using the shared list container.
   const readonlySection = (
     testId: string,
@@ -933,23 +965,26 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
   // ======== Official tab (official builtin list + extension + auto-injected sections) ========
   const officialPane = (
     <div className='flex flex-col gap-24px'>
-      <div data-testid='official-skills-section'>
+      {officialSkillSection(
+        'brainbook-skills-section',
+        BRAINBOOK_BRAND.productName,
+        officialSkillGroups.brainbook,
+        filteredBrainbookSkills
+      )}
+
+      <div data-testid='aionui-skills-section'>
         <p className='m-0 mb-12px text-12px leading-relaxed text-t-tertiary'>
           {t('settings.skillsHub.officialHint', {
             defaultValue: 'Built-in skills maintained by AionUi — read-only and updated with each release.',
           })}
         </p>
-        {officialSkills.length > 0 ? (
-          <div className='flex flex-col gap-8px rounded-12px border border-border-2 bg-2 p-8px md:rounded-16px md:p-10px'>
-            {filteredOfficialSkills.length === 0 && (
-              <div className='text-center text-t-secondary text-13px py-32px bg-fill-1 rd-12px border border-border-2 border-dashed'>
-                {t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills.' })}
-              </div>
-            )}
-            {filteredOfficialSkills.map((skill) =>
-              renderReadonlySkillCard(skill, 'official', `official-skill-card-${normalizeTestId(skill.name)}`)
-            )}
-          </div>
+        {officialSkillGroups.platform.length > 0 ? (
+          officialSkillSection(
+            'aionui-platform-skills-list',
+            BRAINBOOK_BRAND.parentProductName,
+            officialSkillGroups.platform,
+            filteredPlatformSkills
+          )
         ) : (
           <div className='text-center text-t-secondary text-13px py-40px bg-fill-1 rd-12px border border-border-2 border-dashed'>
             {loading
