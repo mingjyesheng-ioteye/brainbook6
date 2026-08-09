@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const openExternalUrlMock = vi.fn();
+const { openExternalUrlMock } = vi.hoisted(() => ({
+  openExternalUrlMock: vi.fn(),
+}));
 
 vi.mock('@/renderer/utils/platform', () => ({
   openExternalUrl: openExternalUrlMock,
@@ -18,15 +20,15 @@ describe('redirectUpdateToBrainbookInstall', () => {
     document.head.innerHTML = '<meta name="application-name" content="BrainBook">';
   });
 
-  it('opens the temporary BrainBook install page and handles the update action', async () => {
-    await expect(redirectUpdateToBrainbookInstall()).resolves.toBe(true);
+  it('opens the temporary BrainBook install page and handles the update action', () => {
+    expect(redirectUpdateToBrainbookInstall()).toBe(true);
     expect(openExternalUrlMock).toHaveBeenCalledWith(BRAINBOOK_INSTALL_URL);
   });
 
-  it('leaves the parent updater in control for other application brands', async () => {
+  it('leaves the parent updater in control for other application brands', () => {
     document.head.innerHTML = '<meta name="application-name" content="AionUi">';
 
-    await expect(redirectUpdateToBrainbookInstall()).resolves.toBe(false);
+    expect(redirectUpdateToBrainbookInstall()).toBe(false);
     expect(openExternalUrlMock).not.toHaveBeenCalled();
   });
 });
