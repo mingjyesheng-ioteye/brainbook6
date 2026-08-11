@@ -11,34 +11,24 @@ export const BRAINBOOK_BRAND = {
 } as const;
 
 const BRAINBOOK_ASSISTANT_IDS = new Set([
-  'agency_develop',
   'arcmercer_user',
-  'bb_excel',
   'customer_support',
   'demo_user',
   'develop_user',
-  'gstack',
   'guardian',
-  'opencode',
-  'paperclip',
-  'paycom_user',
   'samsara',
   'springboard',
-  'superpowers',
-  'therap_user',
 ]);
 
 const BRAINBOOK_SKILL_IDS = new Set([
-  'agency_develop',
-  'bb_excel',
+  'arcmercer_user',
+  'browser-automation',
   'customer_support',
-  'gstack',
+  'demo_user',
+  'develop_user',
   'guardian',
-  'opencode',
-  'paperclip',
   'samsara',
   'springboard',
-  'superpowers',
 ]);
 
 export const isBrainbookAssistantId = (id: string): boolean => BRAINBOOK_ASSISTANT_IDS.has(id);
