@@ -26,6 +26,9 @@ type UseConversationActionsParams = {
   setSelectedConversationIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleSelectedConversation: (conversation: TChatConversation) => void;
   markAsRead: (conversation_id: string) => void;
+  markManualUnread: (conversation_id: string) => void;
+  clearManualUnread: (conversation_id: string) => void;
+  isManualUnread: (conversation_id: string) => boolean;
 };
 
 export const useConversationActions = ({
@@ -36,6 +39,9 @@ export const useConversationActions = ({
   setSelectedConversationIds,
   toggleSelectedConversation,
   markAsRead,
+  markManualUnread,
+  clearManualUnread,
+  isManualUnread,
 }: UseConversationActionsParams) => {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameModalName, setRenameModalName] = useState<string>('');
@@ -89,62 +95,36 @@ export const useConversationActions = ({
     [id, navigate]
   );
 
-  const handleDeleteClick = useCallback(
-    (conversation_id: string) => {
-      Modal.confirm({
-        title: t('conversation.history.deleteTitle'),
-        content: t('conversation.history.deleteConfirm'),
-        okText: t('conversation.history.confirmDelete'),
-        cancelText: t('conversation.history.cancelDelete'),
-        okButtonProps: { status: 'warning' },
-        onOk: async () => {
-          try {
-            const success = await removeConversation(conversation_id);
-            if (success) {
-              emitter.emit('chat.history.refresh');
-              Message.success(t('conversation.history.deleteSuccess'));
-            } else {
-              Message.error(t('conversation.history.deleteFailed'));
-            }
-          } catch (error) {
-            console.error('Failed to remove conversation:', error);
-            Message.error(t('conversation.history.deleteFailed'));
-          }
-        },
-        style: { borderRadius: '12px' },
-        alignCenter: true,
-        getPopupContainer: () => document.body,
-      });
-    },
-    [removeConversation, t]
-  );
-
-  const handleBatchDelete = useCallback(() => {
+  const handleBatchArchive = useCallback(() => {
     if (selectedConversationIds.size === 0) {
       Message.warning(t('conversation.history.batchNoSelection'));
       return;
     }
 
     Modal.confirm({
-      title: t('conversation.history.batchDelete'),
-      content: t('conversation.history.batchDeleteConfirm', { count: selectedConversationIds.size }),
-      okText: t('conversation.history.confirmDelete'),
-      cancelText: t('conversation.history.cancelDelete'),
-      okButtonProps: { status: 'warning' },
+      title: t('conversation.history.batchArchive'),
+      content: t('conversation.history.batchArchiveConfirm', { count: selectedConversationIds.size }),
+      okText: t('conversation.history.batchArchive'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
+        // No batch endpoint exists; archive each selected conversation on its
+        // own. The active list (both read models) drops archived rows, so the
+        // refresh clears the selection's rows and the archive page picks them up.
         const selectedIds = Array.from(selectedConversationIds);
         try {
-          const results = await Promise.all(selectedIds.map((conversation_id) => removeConversation(conversation_id)));
-          const successCount = results.filter(Boolean).length;
+          const results = await Promise.allSettled(
+            selectedIds.map((item_id) => ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id }))
+          );
+          const successCount = results.filter((r) => r.status === 'fulfilled').length;
           emitter.emit('chat.history.refresh');
           if (successCount > 0) {
-            Message.success(t('conversation.history.batchDeleteSuccess', { count: successCount }));
+            Message.success(t('conversation.history.batchArchiveSuccess', { count: successCount }));
           } else {
-            Message.error(t('conversation.history.deleteFailed'));
+            Message.error(t('conversation.history.archiveFailed'));
           }
         } catch (error) {
-          console.error('Failed to batch delete conversations:', error);
-          Message.error(t('conversation.history.deleteFailed'));
+          console.error('Failed to batch archive conversations:', error);
+          Message.error(t('conversation.history.archiveFailed'));
         } finally {
           setSelectedConversationIds(new Set());
           onBatchModeChange?.(false);
@@ -154,7 +134,7 @@ export const useConversationActions = ({
       alignCenter: true,
       getPopupContainer: () => document.body,
     });
-  }, [onBatchModeChange, removeConversation, selectedConversationIds, t, setSelectedConversationIds]);
+  }, [onBatchModeChange, selectedConversationIds, t, setSelectedConversationIds]);
 
   const handleEditStart = useCallback((conversation: TChatConversation) => {
     setRenameModalId(conversation.id);
@@ -229,6 +209,17 @@ export const useConversationActions = ({
     setDropdownVisibleId(visible ? conversation_id : null);
   }, []);
 
+  const handleToggleManualUnread = useCallback(
+    (conversation: TChatConversation) => {
+      if (isManualUnread(conversation.id)) {
+        clearManualUnread(conversation.id);
+      } else {
+        markManualUnread(conversation.id);
+      }
+    },
+    [clearManualUnread, isManualUnread, markManualUnread]
+  );
+
   const handleOpenMenu = useCallback((conversation: TChatConversation) => {
     setDropdownVisibleId(conversation.id);
   }, []);
@@ -259,49 +250,71 @@ export const useConversationActions = ({
   );
 
   /**
-   * Remove project state — rendered via AionModal in the GroupedHistory component.
-   * Uses project's design system: AionModal component with danger-styled action button.
+   * Archive-project state — rendered via AionModal in the GroupedHistory component.
+   * The left panel groups conversations by workspace folder (not by a bound
+   * project record), so there is no project id to hand the `archiveProject`
+   * endpoint. Archiving the group therefore archives each conversation in it —
+   * the same soft move as the per-row and batch archive actions.
    */
-  const [removeProjectTarget, setRemoveProjectTarget] = useState<{
+  const [archiveProjectTarget, setArchiveProjectTarget] = useState<{
     name: string;
     conversations: TChatConversation[];
   } | null>(null);
-  const [removeProjectLoading, setRemoveProjectLoading] = useState(false);
+  const [archiveProjectLoading, setArchiveProjectLoading] = useState(false);
 
-  const handleRemoveProject = useCallback((projectName: string, conversations: TChatConversation[]) => {
+  const handleArchiveProject = useCallback((projectName: string, conversations: TChatConversation[]) => {
     if (conversations.length === 0) return;
-    setRemoveProjectTarget({ name: projectName, conversations });
+    setArchiveProjectTarget({ name: projectName, conversations });
   }, []);
 
-  const handleRemoveProjectCancel = useCallback(() => {
-    if (removeProjectLoading) return;
-    setRemoveProjectTarget(null);
-  }, [removeProjectLoading]);
+  const handleArchiveProjectCancel = useCallback(() => {
+    if (archiveProjectLoading) return;
+    setArchiveProjectTarget(null);
+  }, [archiveProjectLoading]);
 
-  const handleRemoveProjectConfirm = useCallback(async () => {
-    if (!removeProjectTarget) return;
-    setRemoveProjectLoading(true);
+  const handleArchiveProjectConfirm = useCallback(async () => {
+    if (!archiveProjectTarget) return;
+    setArchiveProjectLoading(true);
     try {
-      const results = await Promise.all(removeProjectTarget.conversations.map((c) => removeConversation(c.id)));
-      const successCount = results.filter(Boolean).length;
+      const results = await Promise.allSettled(
+        archiveProjectTarget.conversations.map((c) =>
+          ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id: c.id })
+        )
+      );
+      const successCount = results.filter((r) => r.status === 'fulfilled').length;
       emitter.emit('chat.history.refresh');
       if (successCount > 0) {
-        Message.success(
-          t('conversation.history.batchDeleteSuccess', {
-            count: successCount,
-          })
-        );
+        Message.success(t('conversation.history.batchArchiveSuccess', { count: successCount }));
       } else {
-        Message.error(t('conversation.history.deleteFailed'));
+        Message.error(t('conversation.history.archiveFailed'));
       }
-      setRemoveProjectTarget(null);
+      setArchiveProjectTarget(null);
     } catch (error) {
-      console.error('Failed to remove project:', error);
-      Message.error(t('conversation.history.deleteFailed'));
+      console.error('Failed to archive project:', error);
+      Message.error(t('conversation.history.archiveFailed'));
     } finally {
-      setRemoveProjectLoading(false);
+      setArchiveProjectLoading(false);
     }
-  }, [removeProjectTarget, removeConversation, t]);
+  }, [archiveProjectTarget, t]);
+
+  const handleArchive = useCallback(
+    async (conversation: TChatConversation) => {
+      // Archiving moves the conversation into the archived slice (the backend
+      // also unpins it). Both the new sidebar read model and the legacy list
+      // exclude archived rows, so the refresh drops the row from the active
+      // list on its own; the archived management page picks it up.
+      setDropdownVisibleId(null);
+      try {
+        await ipcBridge.sidebar.archive.invoke({ item_type: 'conversation', item_id: conversation.id });
+        emitter.emit('chat.history.refresh');
+        Message.success(t('conversation.history.archiveSuccess'));
+      } catch (error) {
+        console.error('Failed to archive conversation:', error);
+        Message.error(t('conversation.history.archiveFailed'));
+      }
+    },
+    [t]
+  );
 
   return {
     renameModalVisible,
@@ -310,19 +323,20 @@ export const useConversationActions = ({
     renameLoading,
     dropdownVisibleId,
     handleConversationClick,
-    handleDeleteClick,
-    handleBatchDelete,
+    handleBatchArchive,
+    handleArchive,
     handleEditStart,
     handleRenameConfirm,
     handleRenameCancel,
     handleTogglePin,
     handleMenuVisibleChange,
     handleOpenMenu,
+    handleToggleManualUnread,
     handleCreateCronTask,
-    handleRemoveProject,
-    removeProjectTarget,
-    removeProjectLoading,
-    handleRemoveProjectCancel,
-    handleRemoveProjectConfirm,
+    handleArchiveProject,
+    archiveProjectTarget,
+    archiveProjectLoading,
+    handleArchiveProjectCancel,
+    handleArchiveProjectConfirm,
   };
 };

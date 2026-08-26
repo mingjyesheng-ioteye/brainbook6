@@ -39,6 +39,8 @@
   "expandMore": "نمایش بیشتر",
   "collapse": "جمع کردن",
   "viewMoreLines": "نمایش بیشتر ({{count}} خط)",
+  "viewMoreLines_one": "نمایش بیشتر ({{count}} خط)",
+  "viewMoreLines_other": "نمایش بیشتر ({{count}} خط)",
   "success": "موفقیت",
   "error": "خطا",
   "saveSuccess": "با موفقیت ذخیره شد",
@@ -199,5 +201,6 @@
     "second_short": "ث"
   },
   "selectedCount": "{{count}} انتخاب‌شده",
-  "selectedSkills": "مهارت‌های انتخاب‌شده"
+  "selectedSkills": "مهارت‌های انتخاب‌شده",
+  "aiAssistant": "دستیار هوش مصنوعی"
 }

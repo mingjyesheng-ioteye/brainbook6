@@ -38,6 +38,8 @@
   "expandMore": "Mehr anzeigen",
   "collapse": "Einklappen",
   "viewMoreLines": "Mehr anzeigen ({{count}} Zeilen)",
+  "viewMoreLines_one": "Mehr anzeigen ({{count}} Zeile)",
+  "viewMoreLines_other": "Mehr anzeigen ({{count}} Zeilen)",
   "success": "Erfolgreich",
   "error": "Fehler",
   "saveSuccess": "Erfolgreich gespeichert",
@@ -199,5 +201,6 @@
   },
   "goBack": "Zurück",
   "selectedCount": "{{count}} ausgewählt",
-  "selectedSkills": "Ausgewählte Skills"
+  "selectedSkills": "Ausgewählte Skills",
+  "aiAssistant": "KI-Assistent"
 }

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DeleteOne, EditOne, Peoples, Plus, Pushpin, Right } from '@icon-park/react';
+import { EditOne, FolderClose, Peoples, Plus, Pushpin, Right } from '@icon-park/react';
 import { Input, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -41,7 +41,7 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { teams, mutate: refreshTeams, removeTeam } = useTeamList();
+  const { teams, mutate: refreshTeams } = useTeamList();
   const teamBadgeCounts = useSiderTeamBadges(teams);
   const isTeamRunning = useSiderTeamRunning(teams);
   const { mutate: globalMutate } = useSWRConfig();
@@ -108,6 +108,26 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
     [navigate, onSessionClick]
   );
 
+  // Archive-first: teams are archived (not hard-deleted) from the sider. The
+  // backend team list excludes archived rows, so the refresh drops it here;
+  // the archive page in Settings picks it up for restore or permanent delete.
+  const handleArchiveTeam = useCallback(
+    async (team_id: string) => {
+      try {
+        await ipcBridge.sidebar.archive.invoke({ item_type: 'team', item_id: team_id });
+        await refreshTeams();
+        Message.success(t('team.sider.archiveSuccess'));
+        if (window.location.hash.includes(`/team/${team_id}`)) {
+          window.location.hash = '#/';
+        }
+      } catch (err) {
+        console.error('Failed to archive team:', err);
+        Message.error(t('team.sider.archiveFailed'));
+      }
+    },
+    [refreshTeams, t]
+  );
+
   return (
     <>
       {collapsed ? (
@@ -145,7 +165,7 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
                     )}
                     {(teamBadgeCounts.get(team.id) ?? 0) > 0 && (
                       <span
-                        className='absolute top-4px right-4px w-18px h-18px rounded-full text-10px font-bold flex items-center justify-center leading-none bg-danger-6 text-white'
+                        className='absolute top-4px end-4px w-18px h-18px rounded-full text-10px font-bold flex items-center justify-center leading-none bg-danger-6 text-white'
                         style={{ lineHeight: 1 }}
                       >
                         {(teamBadgeCounts.get(team.id) ?? 0) > 99 ? '99+' : teamBadgeCounts.get(team.id)}
@@ -167,7 +187,7 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
             <span className='text-14px text-t-tertiary sider-section-title group-hover/label:text-t-primary transition-colors font-[500] leading-none'>
               {t('team.sider.title')}
             </span>
-            <span className='ml-2px flex items-center justify-center opacity-0 group-hover/label:opacity-100 transition-opacity text-t-tertiary shrink-0'>
+            <span className='ms-2px flex items-center justify-center opacity-0 group-hover/label:opacity-100 transition-opacity text-t-tertiary shrink-0'>
               <Right
                 theme='outline'
                 size={12}
@@ -179,7 +199,7 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
             <Tooltip content={t('team.sider.createTeam')} position='top'>
               <div
                 data-testid='team-create-btn'
-                className='ml-auto -mr-4px size-20px rd-4px flex items-center justify-center hover:bg-fill-4 transition-all shrink-0 cursor-pointer text-t-secondary hover:text-t-primary'
+                className='ms-auto -me-4px size-20px rd-4px flex items-center justify-center hover:bg-fill-4 transition-all shrink-0 cursor-pointer text-t-secondary hover:text-t-primary'
                 onClick={(e) => {
                   e.stopPropagation();
                   setCreateTeamVisible(true);
@@ -211,10 +231,9 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
                   label: t('team.sider.rename'),
                 },
                 {
-                  key: 'delete',
-                  icon: <DeleteOne theme='outline' size='14' />,
-                  label: t('team.sider.delete'),
-                  danger: true,
+                  key: 'archive',
+                  icon: <FolderClose theme='outline' size='14' />,
+                  label: t('team.sider.archive'),
                 },
               ];
               const teamBadge = teamBadgeCounts.get(team.id) ?? 0;
@@ -248,32 +267,15 @@ const TeamSiderSection: React.FC<TeamSiderSectionProps> = ({
                         setRenameId(team.id);
                         setRenameName(team.name);
                         setRenameVisible(true);
-                      } else if (key === 'delete') {
-                        Modal.confirm({
-                          title: t('team.sider.deleteConfirm'),
-                          content: t('team.sider.deleteConfirmContent'),
-                          okText: t('team.sider.deleteOk'),
-                          cancelText: t('team.sider.deleteCancel'),
-                          okButtonProps: { status: 'warning' },
-                          onOk: async () => {
-                            const teamIdToDelete = team.id;
-                            await removeTeam(teamIdToDelete);
-                            Message.success(t('team.sider.deleteSuccess'));
-                            if (window.location.hash.includes(`/team/${teamIdToDelete}`)) {
-                              window.location.hash = '#/';
-                            }
-                          },
-                          style: { borderRadius: '12px' },
-                          alignCenter: true,
-                          getPopupContainer: () => document.body,
-                        });
+                      } else if (key === 'archive') {
+                        void handleArchiveTeam(team.id);
                       }
                     }}
                     onClick={() => handleTeamClick(team.id)}
                   />
                   {teamBadge > 0 && (
                     <span
-                      className='absolute right-11px top-1/2 -translate-y-1/2 w-18px h-18px rounded-full text-10px font-bold flex items-center justify-center pointer-events-none z-10 group-hover:hidden bg-danger-6 text-white'
+                      className='absolute end-11px top-1/2 -translate-y-1/2 w-18px h-18px rounded-full text-10px font-bold flex items-center justify-center pointer-events-none z-10 group-hover:hidden bg-danger-6 text-white'
                       style={{ lineHeight: 1 }}
                     >
                       {teamBadge > 99 ? '99+' : teamBadge}

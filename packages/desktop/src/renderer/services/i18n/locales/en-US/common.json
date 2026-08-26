@@ -39,6 +39,8 @@
   "expandMore": "Expand More",
   "collapse": "Collapse",
   "viewMoreLines": "View More ({{count}} lines)",
+  "viewMoreLines_one": "View More ({{count}} line)",
+  "viewMoreLines_other": "View More ({{count}} lines)",
   "success": "Success",
   "error": "Error",
   "saveSuccess": "Saved successfully",
@@ -199,5 +201,6 @@
     "second_short": "s"
   },
   "selectedCount": "Selected {{count}}",
-  "selectedSkills": "Selected skills"
+  "selectedSkills": "Selected skills",
+  "aiAssistant": "AI Assistant"
 }

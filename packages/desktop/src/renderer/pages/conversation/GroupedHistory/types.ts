@@ -44,7 +44,9 @@ export type ExportTask =
 export type ConversationRowProps = {
   conversation: TChatConversation;
   isGenerating: boolean;
-  hasCompletionUnread: boolean;
+  hasUnread: boolean;
+  /** Whether the user manually marked this conversation as unread (persisted). */
+  isManualUnread: boolean;
   collapsed: boolean;
   tooltipEnabled: boolean;
   batchMode: boolean;
@@ -57,9 +59,10 @@ export type ConversationRowProps = {
   onMenuVisibleChange: (conversation_id: string, visible: boolean) => void;
   onEditStart: (conversation: TChatConversation) => void;
   onCreateCronTask: (conversation: TChatConversation) => void;
-  onDelete: (conversation_id: string) => void;
+  onArchive: (conversation: TChatConversation) => void;
   onExport?: (conversation: TChatConversation) => void;
   onTogglePin: (conversation: TChatConversation) => void;
+  onToggleManualUnread: (conversation: TChatConversation) => void;
   getJobStatus: (conversation_id: string) => 'none' | 'active' | 'paused' | 'error' | 'unread';
   /** Resolve a loaded conversation's name by id (fork-lineage badge tooltip). */
   resolveConversationName?: (conversation_id: string) => string | undefined;

@@ -39,6 +39,10 @@
   "expandMore": "Розгорнути більше",
   "collapse": "Згорнути",
   "viewMoreLines": "Показати ще ({{count}} рядків)",
+  "viewMoreLines_one": "Показати ще ({{count}} рядок)",
+  "viewMoreLines_other": "Показати ще ({{count}} рядків)",
+  "viewMoreLines_few": "Показати ще ({{count}} рядки)",
+  "viewMoreLines_many": "Показати ще ({{count}} рядків)",
   "success": "Успішно",
   "error": "Помилка",
   "saveSuccess": "Збережено успішно",
@@ -200,5 +204,6 @@
     "second_short": "с"
   },
   "selectedCount": "Вибрано {{count}}",
-  "selectedSkills": "Вибрані навички"
+  "selectedSkills": "Вибрані навички",
+  "aiAssistant": "ШІ-асистент"
 }
