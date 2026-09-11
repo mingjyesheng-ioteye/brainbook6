@@ -3,6 +3,10 @@ import type { BrainbookSignInRequest, BrainbookStatus } from './types';
 
 export const BRAINBOOK_ACCESS_CHANGED_EVENT = 'brainbook.access.changed';
 
+export async function getBrainbookLoginOptions(): Promise<{ configured: boolean }> {
+  return httpRequest<{ configured: boolean }>('GET', '/api/brainbook/auth/options');
+}
+
 export async function getBrainbookStatus(): Promise<BrainbookStatus> {
   return httpRequest<BrainbookStatus>('GET', '/api/brainbook/status');
 }

@@ -114,6 +114,15 @@ describe('static-server', () => {
     expect(json.proxied).toBe(true);
   });
 
+  it('GET /login renders the SPA after sign-out instead of proxying to Core', async () => {
+    const backend = await startMockBackend((_req, response) => response.writeHead(405).end());
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+    const response = await fetch(`${handle.localUrl}/login`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('<title>root</title>');
+  });
+
   it('/api/auth/user reverse-proxies to backend (no local handler)', async () => {
     const backend = await startMockBackend((req, res) => {
       if (req.url === '/api/auth/user' && req.method === 'GET') {

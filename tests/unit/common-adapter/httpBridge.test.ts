@@ -464,6 +464,7 @@ describe('httpBridge', () => {
       expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/api/test'), {
         method: 'GET',
         headers: {},
+        credentials: 'include',
         body: undefined,
       });
     });

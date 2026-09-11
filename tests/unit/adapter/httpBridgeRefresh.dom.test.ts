@@ -39,6 +39,30 @@ describe('httpRequest 401 → refresh → replay (WebUI #4124 fix)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete (window as WindowWithPort).__backendPort;
+    document.cookie = 'aionui-csrf-token=; Max-Age=0; Path=/';
+  });
+
+  it('sends the Core CSRF cookie token and credentials on Supabase sign-in', async () => {
+    document.cookie = 'aionui-csrf-token=csrf-value; Path=/';
+    const fetchMock = vi.fn(async () => jsonResponse(200, { data: { signed_in: true } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await httpRequest('POST', '/api/brainbook/auth/signin', { email: 'user@example.com', password: 'secret' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/brainbook/auth/signin',
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-value' }),
+      })
+    );
+  });
+
+  it('does not replay invalid Supabase credentials through local session refresh', async () => {
+    const fetchMock = vi.fn(async () => errorResponse(401, { error: 'Invalid email or password' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      httpRequest('POST', '/api/brainbook/auth/login', { email: 'user@example.com', password: 'wrong' })
+    ).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes once and replays the original request on 401, returning unwrapped data', async () => {

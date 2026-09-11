@@ -9,6 +9,7 @@ import {
 } from '@/renderer/services/brainbook/brainbookApi';
 import type { BrainbookStatus } from '@/renderer/services/brainbook/types';
 import { mutate as swrMutate } from 'swr';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 
 const refreshProtectedCatalogs = async () => {
   await Promise.all([swrMutate('assistants.list'), swrMutate('skills.list')]);
@@ -16,6 +17,7 @@ const refreshProtectedCatalogs = async () => {
 };
 
 export function useBrainbookAccount() {
+  const { logout } = useAuth();
   const [status, setStatus] = useState<BrainbookStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -57,13 +59,17 @@ export function useBrainbookAccount() {
   const signOut = useCallback(async () => {
     setBusy(true);
     try {
+      if (!window.electronAPI) {
+        await logout();
+        return;
+      }
       await signOutBrainbook();
       await refresh();
       await refreshProtectedCatalogs();
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [logout, refresh]);
 
   const setSyncEnabled = useCallback(async (enabled: boolean) => {
     setBusy(true);

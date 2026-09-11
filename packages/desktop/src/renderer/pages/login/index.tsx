@@ -5,6 +5,8 @@ import { changeLanguage } from '@/renderer/services/i18n';
 import { useNavigate } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '../../hooks/context/AuthContext';
+import { Radio } from '@arco-design/web-react';
+import { getBrainbookLoginOptions } from '@/renderer/services/brainbook/brainbookApi';
 import './LoginPage.css';
 
 type MessageState = {
@@ -42,6 +44,28 @@ const LoginPage: React.FC = () => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [provider, setProvider] = useState<'local' | 'supabase'>('local');
+  const [supabaseAvailable, setSupabaseAvailable] = useState(false);
+  const [checkingProviders, setCheckingProviders] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getBrainbookLoginOptions()
+      .then(({ configured }) => {
+        if (cancelled) return;
+        setSupabaseAvailable(configured);
+        setProvider(configured ? 'supabase' : 'local');
+      })
+      .catch(() => {
+        if (!cancelled) setMessage({ type: 'error', text: t('login.errors.networkError') });
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingProviders(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
@@ -63,11 +87,10 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     const isRememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
+    localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
     if (isRememberMe) {
       const storedUsername = localStorage.getItem(REMEMBERED_USERNAME_KEY);
-      const storedPassword = localStorage.getItem(REMEMBERED_PASSWORD_KEY);
       if (storedUsername) setUsername(deobfuscate(storedUsername));
-      if (storedPassword) setPassword(deobfuscate(storedPassword));
       setRememberMe(true);
     }
     window.setTimeout(() => {
@@ -143,13 +166,14 @@ const LoginPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      const result = await login({ username: trimmedUsername, password, remember: rememberMe });
+      const result = await login({ username: trimmedUsername, password, remember: rememberMe, provider });
+      setPassword('');
+      localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
 
       if (result.success) {
         if (rememberMe) {
           localStorage.setItem(REMEMBER_ME_KEY, 'true');
           localStorage.setItem(REMEMBERED_USERNAME_KEY, obfuscate(trimmedUsername));
-          localStorage.setItem(REMEMBERED_PASSWORD_KEY, obfuscate(password));
         } else {
           localStorage.removeItem(REMEMBER_ME_KEY);
           localStorage.removeItem(REMEMBERED_USERNAME_KEY);
@@ -184,7 +208,7 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, navigate, password, rememberMe, showMessage, t, username]
+    [login, navigate, password, provider, rememberMe, showMessage, t, username]
   );
 
   if (status === 'checking') {
@@ -224,9 +248,24 @@ const LoginPage: React.FC = () => {
         </div>
 
         <form className='login-page__form' onSubmit={handleSubmit}>
+          {supabaseAvailable && (
+            <Radio.Group
+              type='button'
+              value={provider}
+              disabled={loading}
+              onChange={(value: 'local' | 'supabase') => {
+                setProvider(value);
+                setPassword('');
+              }}
+              options={[
+                { label: t('settings.brainbook'), value: 'supabase' },
+                { label: t('login.brand'), value: 'local' },
+              ]}
+            />
+          )}
           <div className='login-page__form-item'>
             <label className='login-page__label' htmlFor='username'>
-              {t('login.username')}
+              {provider === 'supabase' ? t('settings.brainbookEmail') : t('login.username')}
             </label>
             <div className='login-page__input-wrapper'>
               <svg
@@ -245,7 +284,7 @@ const LoginPage: React.FC = () => {
                 id='username'
                 name='username'
                 className='login-page__input'
-                placeholder={t('login.usernamePlaceholder')}
+                placeholder={provider === 'supabase' ? t('settings.brainbookEmail') : t('login.usernamePlaceholder')}
                 autoComplete='username'
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
@@ -315,7 +354,7 @@ const LoginPage: React.FC = () => {
             <label htmlFor='remember-me'>{t('login.rememberMe')}</label>
           </div>
 
-          <button type='submit' className='login-page__submit' disabled={loading}>
+          <button type='submit' className='login-page__submit' disabled={loading || checkingProviders}>
             {loading && (
               <svg className='login-page__spinner' viewBox='0 0 24 24' width='18' height='18'>
                 <circle

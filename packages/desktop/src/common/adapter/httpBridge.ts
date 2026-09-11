@@ -181,26 +181,26 @@ const REFRESH_ENDPOINT = '/api/auth/refresh';
  * session — refreshing and replaying them would be recursive or nonsensical.
  */
 function isAuthEndpoint(path: string): boolean {
-  return path.startsWith(REFRESH_ENDPOINT) || path === '/login' || path === '/logout';
+  return (
+    path.startsWith(REFRESH_ENDPOINT) ||
+    path.startsWith('/api/brainbook/auth/') ||
+    path === '/login' ||
+    path === '/logout'
+  );
 }
 
 /**
  * Resolve the Core CSRF double-submit token for the current context.
  *
- * The open-source WebUI removed its CSRF layer with the legacy webserver (M6);
- * a double-submit scheme is slated to return in M7. Until then this is a stub
- * that reports "no token available", so the shared session-refresh primitive
- * (`sessionRefresh.ts`) attaches no `x-csrf-token` header and the backend —
- * which enforces no CSRF check here — accepts the request unchanged.
- *
- * It exists as the single seam every state-changing request would call for its
- * token, so restoring CSRF in M7 (and the aionpro superset, whose backend does
- * enforce the double-submit check) only swaps this body — no caller changes.
- *
- * Returns '' — always, for now.
+ * Returns an empty string outside the browser or before Core sets its cookie.
  */
 export function resolveCoreCsrfToken(): string {
-  return '';
+  if (typeof document === 'undefined') return '';
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('aionui-csrf-token='));
+  return cookie?.slice('aionui-csrf-token='.length) ?? '';
 }
 
 function sendHttpRequest(
@@ -213,6 +213,7 @@ function sendHttpRequest(
   return fetch(url, {
     method,
     headers,
+    credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
@@ -231,6 +232,11 @@ export async function httpRequest<T>(
 
   if (options?.headers) {
     Object.assign(headers, options.headers);
+  }
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+    const csrfToken = resolveCoreCsrfToken();
+    if (csrfToken) headers['x-csrf-token'] = csrfToken;
   }
 
   console.debug(
@@ -381,8 +387,7 @@ export function httpDelete<Data, Params = undefined>(
  * Returns a sensible default value and logs a warning.
  */
 export function stubProvider<Data, Params = undefined>(name: string, defaultValue: Data): ProviderLike<Data, Params> {
-  const warnedStubs = ((globalThis as { __aionuiWarnedStubs?: Set<string> }).__aionuiWarnedStubs ??=
-    new Set<string>());
+  const warnedStubs = ((globalThis as { __aionuiWarnedStubs?: Set<string> }).__aionuiWarnedStubs ??= new Set<string>());
   return {
     provider: () => {},
     invoke: (async (_params?: Params) => {
