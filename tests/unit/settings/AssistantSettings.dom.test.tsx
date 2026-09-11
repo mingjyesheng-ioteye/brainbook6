@@ -234,9 +234,10 @@ describe('AssistantSettings', () => {
     expect(screen.getByTestId('switch-enabled-cli')).toBeInTheDocument();
   });
 
-  it('separates BrainBook agents from AionUI built-ins', () => {
+  it('replaces the BrainBook group with Springboard Pro Agents alongside AionUI built-ins', () => {
     const assistants = [
       { id: 'cowork', name: 'Cowork', sort_order: 1, source: 'builtin', enabled: true },
+      { id: 'brainbook-cli', name: 'BrainBook CLI', sort_order: 999, source: 'builtin', enabled: false },
       { id: 'springboard', name: 'Springboard', sort_order: 1000, source: 'builtin', enabled: true },
     ] as AssistantListItem[];
 
@@ -253,11 +254,25 @@ describe('AssistantSettings', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getByTestId('brainbook-agents-section')).toHaveTextContent('Springboard');
-    expect(screen.getByTestId('aionui-agents-section')).toHaveTextContent('Cowork');
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      'Springboard Pro Agents',
+      'AionUI Agents',
+    ]);
+    expect(screen.queryByTestId('brainbook-agents-section')).not.toBeInTheDocument();
+    expect(
+      Array.from(
+        screen.getByTestId('springboard-pro-agents-section').querySelectorAll('[data-testid^="official-card-"]')
+      ).map((card) => card.getAttribute('data-testid'))
+    ).toEqual(['official-card-brainbook-cli', 'official-card-springboard']);
+    expect(
+      screen
+        .getByTestId('aionui-agents-section')
+        .querySelector('[data-testid^="official-card-"]')
+        ?.getAttribute('data-testid')
+    ).toBe('official-card-cowork');
   });
 
-  it('does not render a BrainBook section when access filtering returns only parent agents', () => {
+  it('does not render Springboard Pro Agents when access filtering returns only parent agents', () => {
     render(
       <ConfigProvider>
         <OfficialAssistantsGrid
@@ -271,7 +286,7 @@ describe('AssistantSettings', () => {
       </ConfigProvider>
     );
 
-    expect(screen.queryByTestId('brainbook-agents-section')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('springboard-pro-agents-section')).not.toBeInTheDocument();
     expect(screen.getByTestId('aionui-agents-section')).toHaveTextContent('Cowork');
   });
 

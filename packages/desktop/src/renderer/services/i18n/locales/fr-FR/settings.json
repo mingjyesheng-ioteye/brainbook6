@@ -141,6 +141,7 @@
   "assistants": "Assistants",
   "assistantBackToList": "Tous les assistants",
   "agents": "Agents",
+  "springboardProAgents": "Agents Springboard Pro",
   "assistantsList": "Assistants disponibles",
   "assistantsEmpty": "Aucun assistant configuré.",
   "pdfToPptAssistantName": "PDF vers PPT",

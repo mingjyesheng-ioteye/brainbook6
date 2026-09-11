@@ -12,6 +12,7 @@ export const BRAINBOOK_BRAND = {
 
 const BRAINBOOK_ASSISTANT_IDS = new Set([
   'arcmercer_user',
+  'brainbook-cli',
   'customer_support',
   'demo_user',
   'develop_user',

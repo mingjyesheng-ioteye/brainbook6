@@ -141,6 +141,7 @@
   "assistants": "アシスタント",
   "assistantBackToList": "すべてのアシスタント",
   "agents": "エージェント",
+  "springboardProAgents": "Springboard Pro エージェント",
   "assistantsList": "利用可能なアシスタント一覧",
   "assistantsEmpty": "利用可能なアシスタントがありません。",
   "pdfToPptAssistantName": "PDF to PPT",

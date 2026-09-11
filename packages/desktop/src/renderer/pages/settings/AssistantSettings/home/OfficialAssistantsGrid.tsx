@@ -146,12 +146,10 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
       );
     });
 
-  const renderAssistantGroup = (testId: string, productName: string, items: AssistantListItem[]) =>
+  const renderAssistantGroup = (testId: string, title: string, items: AssistantListItem[]) =>
     items.length > 0 ? (
       <section data-testid={testId} className='flex flex-col gap-10px'>
-        <h3 className='m-0 text-14px font-600 text-t-primary'>
-          {productName} {t('settings.agents', { defaultValue: 'Agents' })}
-        </h3>
+        <h3 className='m-0 text-14px font-600 text-t-primary'>{title}</h3>
         <div className='grid grid-cols-1 gap-14px sm:grid-cols-2 lg:grid-cols-3'>{renderAssistantCards(items)}</div>
       </section>
     ) : null;
@@ -198,8 +196,16 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
               : t('settings.assistantsEmpty', { defaultValue: 'No assistants configured.' })}
           </div>
         ) : null}
-        {renderAssistantGroup('brainbook-agents-section', BRAINBOOK_BRAND.productName, assistantGroups.brainbook)}
-        {renderAssistantGroup('aionui-agents-section', BRAINBOOK_BRAND.parentProductName, assistantGroups.platform)}
+        {renderAssistantGroup(
+          'springboard-pro-agents-section',
+          t('settings.springboardProAgents', { defaultValue: 'Springboard Pro Agents' }),
+          assistantGroups.brainbook
+        )}
+        {renderAssistantGroup(
+          'aionui-agents-section',
+          `${BRAINBOOK_BRAND.parentProductName} ${t('settings.agents', { defaultValue: 'Agents' })}`,
+          assistantGroups.platform
+        )}
       </div>
     </div>
   );

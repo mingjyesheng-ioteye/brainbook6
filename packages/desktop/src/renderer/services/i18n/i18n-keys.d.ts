@@ -2585,6 +2585,7 @@ export type I18nKey =
   | 'settings.speechToTextTestTranscribing'
   | 'settings.speechToTextTestUploadHint'
   | 'settings.speechToTextWholeBadge'
+  | 'settings.springboardProAgents'
   | 'settings.startOnBoot'
   | 'settings.startOnBootDesc'
   | 'settings.startOnBootUnsupported'
