@@ -9,6 +9,8 @@
   "rememberMe": "記住我",
   "submit": "登入",
   "submitting": "登入中...",
+  "or": "或",
+  "continueWithoutBrainbook": "不登入 BrainBook，繼續使用 AionUI",
   "success": "登入成功！準備跳轉...",
   "showPassword": "顯示密碼",
   "hidePassword": "隱藏密碼",

@@ -9,6 +9,8 @@
   "rememberMe": "Recordarme",
   "submit": "Iniciar sesión",
   "submitting": "Iniciando sesión...",
+  "or": "O",
+  "continueWithoutBrainbook": "Continuar sin BrainBook",
   "success": "¡Sesión iniciada! Redirigiendo...",
   "showPassword": "Mostrar contraseña",
   "hidePassword": "Ocultar contraseña",

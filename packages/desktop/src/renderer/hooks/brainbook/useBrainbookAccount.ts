@@ -40,6 +40,14 @@ export function useBrainbookAccount() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const handleAccessChanged = (): void => {
+      void refresh();
+    };
+    window.addEventListener(BRAINBOOK_ACCESS_CHANGED_EVENT, handleAccessChanged);
+    return () => window.removeEventListener(BRAINBOOK_ACCESS_CHANGED_EVENT, handleAccessChanged);
+  }, [refresh]);
+
   const signIn = useCallback(async (email: string, password: string) => {
     setBusy(true);
     try {

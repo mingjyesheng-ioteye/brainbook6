@@ -9,6 +9,8 @@
   "rememberMe": "Remember me",
   "submit": "Sign In",
   "submitting": "Signing in...",
+  "or": "OR",
+  "continueWithoutBrainbook": "Continue without BrainBook",
   "success": "Login successful! Redirecting...",
   "showPassword": "Show password",
   "hidePassword": "Hide password",

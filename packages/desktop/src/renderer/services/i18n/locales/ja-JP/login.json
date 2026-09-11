@@ -9,6 +9,8 @@
   "rememberMe": "ログイン状態を保持",
   "submit": "ログイン",
   "submitting": "ログイン中...",
+  "or": "または",
+  "continueWithoutBrainbook": "BrainBook にサインインせず続行",
   "success": "ログインに成功しました。リダイレクトします...",
   "showPassword": "パスワードを表示",
   "hidePassword": "パスワードを隠す",

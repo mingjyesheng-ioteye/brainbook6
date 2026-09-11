@@ -5,7 +5,6 @@ import { changeLanguage } from '@/renderer/services/i18n';
 import { useNavigate } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '../../hooks/context/AuthContext';
-import { Radio } from '@arco-design/web-react';
 import { getBrainbookLoginOptions } from '@/renderer/services/brainbook/brainbookApi';
 import './LoginPage.css';
 
@@ -36,7 +35,8 @@ const deobfuscate = (text: string): string => {
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { status, login } = useAuth();
+  const { status, login, continueWithoutBrainbook } = useAuth();
+  const canContinueWithoutBrainbook = Boolean(window.electronAPI);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -44,7 +44,6 @@ const LoginPage: React.FC = () => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [provider, setProvider] = useState<'local' | 'supabase'>('local');
   const [supabaseAvailable, setSupabaseAvailable] = useState(false);
   const [checkingProviders, setCheckingProviders] = useState(true);
 
@@ -54,7 +53,6 @@ const LoginPage: React.FC = () => {
       .then(({ configured }) => {
         if (cancelled) return;
         setSupabaseAvailable(configured);
-        setProvider(configured ? 'supabase' : 'local');
       })
       .catch(() => {
         if (!cancelled) setMessage({ type: 'error', text: t('login.errors.networkError') });
@@ -166,7 +164,7 @@ const LoginPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      const result = await login({ username: trimmedUsername, password, remember: rememberMe, provider });
+      const result = await login({ username: trimmedUsername, password, remember: rememberMe, provider: 'supabase' });
       setPassword('');
       localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
 
@@ -208,8 +206,14 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, navigate, password, provider, rememberMe, showMessage, t, username]
+    [login, navigate, password, rememberMe, showMessage, t, username]
   );
+
+  const handleContinueWithoutBrainbook = useCallback(() => {
+    if (continueWithoutBrainbook()) {
+      void navigate('/guid', { replace: true });
+    }
+  }, [continueWithoutBrainbook, navigate]);
 
   if (status === 'checking') {
     return <AppLoader />;
@@ -248,24 +252,14 @@ const LoginPage: React.FC = () => {
         </div>
 
         <form className='login-page__form' onSubmit={handleSubmit}>
-          {supabaseAvailable && (
-            <Radio.Group
-              type='button'
-              value={provider}
-              disabled={loading}
-              onChange={(value: 'local' | 'supabase') => {
-                setProvider(value);
-                setPassword('');
-              }}
-              options={[
-                { label: t('settings.brainbook'), value: 'supabase' },
-                { label: t('login.brand'), value: 'local' },
-              ]}
-            />
-          )}
+          {!checkingProviders && !supabaseAvailable ? (
+            <div className='login-page__message login-page__message--visible login-page__message--error' role='alert'>
+              {t('settings.brainbookNotConfigured')}
+            </div>
+          ) : null}
           <div className='login-page__form-item'>
             <label className='login-page__label' htmlFor='username'>
-              {provider === 'supabase' ? t('settings.brainbookEmail') : t('login.username')}
+              {t('settings.brainbookEmail')}
             </label>
             <div className='login-page__input-wrapper'>
               <svg
@@ -284,8 +278,8 @@ const LoginPage: React.FC = () => {
                 id='username'
                 name='username'
                 className='login-page__input'
-                placeholder={provider === 'supabase' ? t('settings.brainbookEmail') : t('login.usernamePlaceholder')}
-                autoComplete='username'
+                placeholder={t('settings.brainbookEmail')}
+                autoComplete='email'
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 aria-required='true'
@@ -354,7 +348,11 @@ const LoginPage: React.FC = () => {
             <label htmlFor='remember-me'>{t('login.rememberMe')}</label>
           </div>
 
-          <button type='submit' className='login-page__submit' disabled={loading || checkingProviders}>
+          <button
+            type='submit'
+            className='login-page__submit'
+            disabled={loading || checkingProviders || !supabaseAvailable}
+          >
             {loading && (
               <svg className='login-page__spinner' viewBox='0 0 24 24' width='18' height='18'>
                 <circle
@@ -372,6 +370,22 @@ const LoginPage: React.FC = () => {
             )}
             <span>{loading ? t('login.submitting') : t('login.submit')}</span>
           </button>
+
+          {canContinueWithoutBrainbook ? (
+            <>
+              <div className='login-page__separator' aria-hidden='true'>
+                <span>{t('login.or')}</span>
+              </div>
+              <button
+                type='button'
+                className='login-page__skip'
+                disabled={loading}
+                onClick={handleContinueWithoutBrainbook}
+              >
+                {t('login.continueWithoutBrainbook')}
+              </button>
+            </>
+          ) : null}
 
           <div
             role='alert'

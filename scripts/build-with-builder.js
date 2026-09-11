@@ -573,44 +573,6 @@ function findLocalAioncoreBuild() {
   return null;
 }
 
-/**
- * Prepare a local aioncore build for use in production builds.
- * Runs prepare-managed-resources to generate the managed-resources directory.
- * Returns the bundle directory path, or null if preparation fails.
- */
-function prepareLocalBundleForBuild(binaryPath) {
-  const tempDir = path.join(require('os').tmpdir(), 'aioncore-build-bundle', Date.now().toString());
-  const bundleOut = path.join(tempDir, 'bundled');
-  const dataDir = path.join(tempDir, 'data');
-
-  fs.mkdirSync(bundleOut, { recursive: true });
-  fs.mkdirSync(dataDir, { recursive: true });
-
-  try {
-    console.log('  Preparing managed resources for local bundle...');
-    execSync(`"${binaryPath}" --data-dir "${dataDir}" prepare-managed-resources --bundle-out "${bundleOut}"`, {
-      stdio: 'inherit',
-      env: { ...process.env, AIONUI_BUNDLED_MANAGED_RESOURCES: '' },
-    });
-
-    // Verify managed-resources was created
-    if (!fs.existsSync(bundleOut) || fs.readdirSync(bundleOut).length === 0) {
-      console.warn('  Warning: managed-resources generation produced empty output');
-      return null;
-    }
-
-    return bundleOut;
-  } catch (error) {
-    console.warn(`  Warning: Failed to prepare managed resources: ${error.message}`);
-    return null;
-  } finally {
-    // Clean up temp dir
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {}
-  }
-}
-
 function buildWithDmgRetry(cmd, targetArch) {
   const isMac = process.platform === 'darwin';
   const outDir = path.resolve(__dirname, '../out');
@@ -847,14 +809,7 @@ try {
   const localAioncoreBuild = findLocalAioncoreBuild();
   if (localAioncoreBuild) {
     console.log(`  Using local aioncore build: ${localAioncoreBuild}`);
-    // Prepare managed resources if not already present
-    const bundleDir = prepareLocalBundleForBuild(localAioncoreBuild);
-    if (bundleDir) {
-      process.env.AIONUI_BACKEND_LOCAL_BUNDLE_DIR = bundleDir;
-    } else {
-      // Fallback: just use the binary path
-      process.env.AIONUI_BACKEND_LOCAL_BINARY = localAioncoreBuild;
-    }
+    process.env.AIONUI_BACKEND_LOCAL_BINARY = localAioncoreBuild;
   }
 
   prepareAioncore({

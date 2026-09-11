@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { refreshSession } from '@/common/adapter/sessionRefresh';
-import { httpRequest, resolveCoreCsrfToken } from '@/common/adapter/httpBridge';
+import { httpRequest, isBackendHttpError, resolveCoreCsrfToken } from '@/common/adapter/httpBridge';
+import { getBrainbookStatus, signInBrainbook } from '@/renderer/services/brainbook/brainbookApi';
 
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -37,6 +38,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
   login: (params: LoginParams) => Promise<LoginResult>;
+  continueWithoutBrainbook: () => boolean;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   clearAuthCache: () => void;
@@ -45,6 +47,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
+const DESKTOP_BRAINBOOK_SKIP_KEY = 'brainbook.skipForSession';
+const DESKTOP_LOCAL_USER: AuthUser = { id: 'system_default_user', username: 'system_default_user' };
 
 const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
 
@@ -131,8 +135,25 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {
-      setStatus('authenticated');
-      setUser(null);
+      setStatus('checking');
+      try {
+        const brainbookStatus = await getBrainbookStatus();
+        if (brainbookStatus.signed_in) {
+          sessionStorage.removeItem(DESKTOP_BRAINBOOK_SKIP_KEY);
+          setUser({ id: 'brainbook', username: brainbookStatus.email ?? 'brainbook' });
+          setStatus('authenticated');
+        } else if (sessionStorage.getItem(DESKTOP_BRAINBOOK_SKIP_KEY) === 'true') {
+          setUser(DESKTOP_LOCAL_USER);
+          setStatus('authenticated');
+        } else {
+          setUser(null);
+          setStatus('unauthenticated');
+        }
+      } catch (error) {
+        console.error('Failed to check BrainBook session:', error);
+        setUser(null);
+        setStatus('unauthenticated');
+      }
       setReady(true);
       return;
     }
@@ -143,10 +164,24 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setStatus('checking');
 
     const currentUser = await fetchCurrentUser(controller.signal);
-    if (currentUser) {
-      setUser(currentUser);
-      setStatus('authenticated');
-    } else {
+    if (!currentUser) {
+      setUser(null);
+      setStatus('unauthenticated');
+      setReady(true);
+      return;
+    }
+
+    try {
+      const brainbookStatus = await getBrainbookStatus();
+      if (brainbookStatus.signed_in) {
+        setUser(currentUser);
+        setStatus('authenticated');
+      } else {
+        setUser(null);
+        setStatus('unauthenticated');
+      }
+    } catch (error) {
+      console.error('Failed to check BrainBook session:', error);
       setUser(null);
       setStatus('unauthenticated');
     }
@@ -164,6 +199,16 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     async ({ username, password, remember, provider = 'local' }: LoginParams): Promise<LoginResult> => {
       try {
         if (isDesktopRuntime) {
+          if (provider !== 'supabase') {
+            return { success: false, message: 'BrainBook login is required.', code: 'invalidCredentials' };
+          }
+          const brainbookStatus = await signInBrainbook({ email: username, password });
+          if (!brainbookStatus.signed_in) {
+            return { success: false, message: 'BrainBook login failed.', code: 'invalidCredentials' };
+          }
+          sessionStorage.removeItem(DESKTOP_BRAINBOOK_SKIP_KEY);
+          setUser({ id: 'brainbook', username: brainbookStatus.email ?? username });
+          setStatus('authenticated');
           setReady(true);
           return { success: true };
         }
@@ -232,6 +277,21 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       } catch (error) {
         console.error('Login request failed:', error);
 
+        if (isBackendHttpError(error)) {
+          return {
+            success: false,
+            message: error.backendMessage || 'Login failed',
+            code:
+              error.status === 401
+                ? 'invalidCredentials'
+                : error.status === 429
+                  ? 'tooManyAttempts'
+                  : error.status >= 500
+                    ? 'serverError'
+                    : 'unknown',
+          };
+        }
+
         // Check if error is related to CSRF token parsing
         const errorMessage = (error as Error).message;
         if (errorMessage?.includes('parse') || errorMessage?.includes('csrf') || errorMessage?.includes('cookie')) {
@@ -255,11 +315,21 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     []
   );
 
+  const continueWithoutBrainbook = useCallback(() => {
+    if (!isDesktopRuntime) return false;
+    sessionStorage.setItem(DESKTOP_BRAINBOOK_SKIP_KEY, 'true');
+    setUser(DESKTOP_LOCAL_USER);
+    setStatus('authenticated');
+    setReady(true);
+    return true;
+  }, []);
+
   const logout = useCallback(async () => {
     if (isDesktopRuntime) {
       await httpRequest('POST', '/api/brainbook/auth/signout');
+      sessionStorage.removeItem(DESKTOP_BRAINBOOK_SKIP_KEY);
       setUser(null);
-      setStatus('authenticated');
+      setStatus('unauthenticated');
       setReady(true);
       return;
     }
@@ -294,11 +364,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       user,
       status,
       login,
+      continueWithoutBrainbook,
       logout,
       refresh,
       clearAuthCache,
     }),
-    [login, logout, ready, refresh, status, user]
+    [continueWithoutBrainbook, login, logout, ready, refresh, status, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

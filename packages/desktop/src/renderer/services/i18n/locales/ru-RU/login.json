@@ -9,6 +9,8 @@
   "rememberMe": "Запомнить меня",
   "submit": "Войти",
   "submitting": "Вход...",
+  "or": "ИЛИ",
+  "continueWithoutBrainbook": "Продолжить без BrainBook",
   "success": "Вход успешен! Перенаправление...",
   "showPassword": "Показать пароль",
   "hidePassword": "Скрыть пароль",

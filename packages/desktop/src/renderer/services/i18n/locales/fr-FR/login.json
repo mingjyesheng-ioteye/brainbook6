@@ -9,6 +9,8 @@
   "rememberMe": "Se souvenir de moi",
   "submit": "Se connecter",
   "submitting": "Connexion en cours...",
+  "or": "OU",
+  "continueWithoutBrainbook": "Continuer sans BrainBook",
   "success": "Connexion réussie ! Redirection...",
   "showPassword": "Afficher le mot de passe",
   "hidePassword": "Masquer le mot de passe",

@@ -25,6 +25,10 @@ const shortcutMocks = vi.hoisted(() => ({
 const featureMocks = vi.hoisted(() => ({
   teamModeEnabled: false,
 }));
+const brainbookMocks = vi.hoisted(() => ({
+  status: { configured: true, signed_in: false },
+  signOut: vi.fn(() => Promise.resolve()),
+}));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
   useLocation: () => ({ pathname: currentPathname, search: '', hash: '' }),
@@ -66,6 +70,14 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
   },
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
+vi.mock('@/renderer/hooks/brainbook/useBrainbookAccount', () => ({
+  useBrainbookAccount: () => ({
+    status: brainbookMocks.status,
+    loading: false,
+    busy: false,
+    signOut: brainbookMocks.signOut,
+  }),
+}));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
 }));
@@ -96,6 +108,8 @@ describe('Layout sider brand Home button', () => {
     platformMocks.isElectronDesktopMock.mockReturnValue(false);
     shortcutMocks.params = undefined;
     featureMocks.teamModeEnabled = false;
+    brainbookMocks.status = { configured: true, signed_in: false };
+    brainbookMocks.signOut.mockClear();
     sessionStorage.clear();
     currentPathname = '/guid';
   });
@@ -157,18 +171,28 @@ describe('Layout sider brand Home button', () => {
     currentPathname = '/guid';
     renderLayout();
 
-    // No actionable role/label in chat routes.
+    // No back action in chat routes; the account label opens account management.
     expect(screen.queryByLabelText(BACK_KEY)).toBeNull();
-    const wordmark = screen.getByText('AionUi');
+    const wordmark = screen.getByText('settings.brainbook');
     fireEvent.click(wordmark);
-    expect(navigate).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith('/brainbook');
   });
 
-  it('does not navigate when the wordmark is clicked in a non-settings route', () => {
+  it('shows Sign In when signed out and opens the BrainBook account page', () => {
     currentPathname = '/conversation/xyz';
     renderLayout();
 
-    fireEvent.click(screen.getByText('AionUi'));
+    fireEvent.click(screen.getByText('settings.brainbookSignIn'));
+    expect(navigate).toHaveBeenCalledWith('/brainbook');
+    expect(brainbookMocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('shows Sign Out when signed in and signs out without navigating', async () => {
+    brainbookMocks.status = { configured: true, signed_in: true };
+    renderLayout();
+
+    fireEvent.click(screen.getByText('settings.brainbookSignOut'));
+    expect(brainbookMocks.signOut).toHaveBeenCalledTimes(1);
     expect(navigate).not.toHaveBeenCalled();
   });
 

@@ -38,6 +38,7 @@ import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShor
 import { isElectronDesktop } from '@renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import UpdateMigrationDialog from '@/renderer/components/settings/UpdateMigrationDialog';
+import { useBrainbookAccount } from '@/renderer/hooks/brainbook/useBrainbookAccount';
 import '@renderer/styles/layout.css';
 import logoSvg from '@renderer/assets/logo.svg';
 
@@ -132,6 +133,7 @@ const Layout: React.FC<{
   useDesktopTurnNotification();
   const navigate = useNavigate();
   const location = useLocation();
+  const { status: brainbookStatus, loading: brainbookLoading, busy: brainbookBusy, signOut } = useBrainbookAccount();
   const workspaceAvailable =
     location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
   const toggleSider = useCallback(() => {
@@ -165,6 +167,19 @@ const Layout: React.FC<{
     }
     void navigate('/guid');
   }, [navigate]);
+  const handleBrainbookAccount = useCallback(() => {
+    void navigate('/brainbook');
+    if (isMobile) setCollapsed(true);
+  }, [isMobile, navigate]);
+  const handleBrainbookAuth = useCallback(() => {
+    if (!brainbookStatus?.signed_in) {
+      handleBrainbookAccount();
+      return;
+    }
+    void signOut().catch((error) => {
+      console.error('BrainBook sign out failed:', error);
+    });
+  }, [brainbookStatus?.signed_in, handleBrainbookAccount, signOut]);
   // Close preview whenever the user leaves the conversation route entirely
   // (e.g. switches to a team, /guid, or settings). Within /conversation/:id
   // the finer-grained closePreviewIfScopeChanged in conversation/index.tsx
@@ -413,27 +428,45 @@ const Layout: React.FC<{
                     })}
                   />
                 </div>
-                {isSettingsRoute ? (
-                  <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
-                    <div
-                      className='text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer'
-                      role='button'
-                      tabIndex={0}
-                      aria-label={t('common.back', { defaultValue: 'Back to Chat' })}
-                      onClick={handleBrandHome}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          handleBrandHome();
-                        }
-                      }}
+                <div className='collapsed-hidden flex min-w-0 flex-1 items-center gap-8px'>
+                  {isSettingsRoute ? (
+                    <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
+                      <div
+                        className='min-w-0 truncate text-14px text-t-primary font-semibold cursor-pointer'
+                        role='button'
+                        tabIndex={0}
+                        aria-label={t('common.back', { defaultValue: 'Back to Chat' })}
+                        onClick={handleBrandHome}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleBrandHome();
+                          }
+                        }}
+                      >
+                        {t('settings.brainbook')}
+                      </div>
+                    </Tooltip>
+                  ) : (
+                    <button
+                      type='button'
+                      className='min-w-0 truncate border-0 bg-transparent p-0 text-left text-14px text-t-primary font-semibold cursor-pointer'
+                      onClick={handleBrainbookAccount}
                     >
-                      BrainBook
-                    </div>
-                  </Tooltip>
-                ) : (
-                  <div className='text-16px text-t-primary collapsed-hidden font-semibold'>BrainBook</div>
-                )}
+                      {t('settings.brainbook')}
+                    </button>
+                  )}
+                  {!brainbookLoading && brainbookStatus ? (
+                    <button
+                      type='button'
+                      className='shrink-0 border-0 bg-transparent p-0 text-12px font-500 text-[rgb(var(--primary-6))] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50'
+                      disabled={brainbookBusy}
+                      onClick={handleBrainbookAuth}
+                    >
+                      {brainbookStatus.signed_in ? t('settings.brainbookSignOut') : t('settings.brainbookSignIn')}
+                    </button>
+                  ) : null}
+                </div>
                 {isMobile && !collapsed && (
                   <button
                     type='button'
