@@ -943,6 +943,92 @@ describe('AssistantEditorSections', () => {
     ).toBeInTheDocument();
   });
 
+  it('allows BrainBook CLI to select BrainBook and platform skills', async () => {
+    renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({
+          isCreating: false,
+          agent: {
+            value: 'agent-aionrs',
+            setValue: vi.fn(),
+            availableBackends: [backendOption('agent-aionrs', 'aionrs', 'Aion CLI')],
+          },
+          skills: {
+            availableSkills: [
+              { name: 'browser-automation', description: '', location: '', is_custom: false, source: 'builtin' },
+              { name: 'cron', description: '', location: '', is_custom: false, source: 'builtin' },
+            ],
+            selectedSkills: [],
+            setSelectedSkills: vi.fn(),
+            pendingSkills: [],
+            setDeletePendingSkillName: vi.fn(),
+            setDeleteCustomSkillName: vi.fn(),
+            builtinAutoSkills: [],
+            disabledBuiltinSkills: [],
+            setDisabledBuiltinSkills: vi.fn(),
+          },
+        })}
+        activeAssistant={{
+          id: 'brainbook-cli',
+          name: 'BrainBook CLI',
+          sort_order: 1,
+          source: 'builtin',
+          enabled: true,
+          agent_id: 'agent-aionrs',
+          agent: { type: 'aionrs', source: 'internal' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('select-assistant-default-skills'));
+    expect(await screen.findByText('browser-automation')).toBeInTheDocument();
+    expect(screen.getByText('cron')).toBeInTheDocument();
+  });
+
+  it('restricts Aion CLI to non-BrainBook skills', async () => {
+    const setSelectedSkills = vi.fn();
+    renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({
+          isCreating: false,
+          agent: {
+            value: 'agent-aionrs',
+            setValue: vi.fn(),
+            availableBackends: [backendOption('agent-aionrs', 'aionrs', 'Aion CLI')],
+          },
+          skills: {
+            availableSkills: [
+              { name: 'browser-automation', description: '', location: '', is_custom: false, source: 'builtin' },
+              { name: 'cron', description: '', location: '', is_custom: false, source: 'builtin' },
+            ],
+            selectedSkills: ['browser-automation', 'cron'],
+            setSelectedSkills,
+            pendingSkills: [],
+            setDeletePendingSkillName: vi.fn(),
+            setDeleteCustomSkillName: vi.fn(),
+            builtinAutoSkills: [],
+            disabledBuiltinSkills: [],
+            setDisabledBuiltinSkills: vi.fn(),
+          },
+        })}
+        activeAssistant={{
+          id: 'bare-aionrs',
+          name: 'Aion CLI',
+          sort_order: 1,
+          source: 'generated',
+          enabled: true,
+          agent_id: 'agent-aionrs',
+          agent: { type: 'aionrs', source: 'internal' },
+        }}
+      />
+    );
+
+    await waitFor(() => expect(setSelectedSkills).toHaveBeenCalledWith(['cron']));
+    fireEvent.click(screen.getByTestId('select-assistant-default-skills'));
+    expect(await screen.findByText('cron')).toBeInTheDocument();
+    expect(screen.queryByText('browser-automation')).not.toBeInTheDocument();
+  });
+
   it('renders single default-skill and default-mcp controls with hub links', () => {
     renderWithProviders(
       <AssistantEditorSections

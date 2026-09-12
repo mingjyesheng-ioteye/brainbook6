@@ -16,12 +16,13 @@ import { AionInlineSearchInput } from '@/renderer/components/base';
 import { DROPDOWN_SEARCH_THRESHOLD } from '@/renderer/components/agent/runtimeSelectorOptions';
 import { Avatar, Select, Tag } from '@arco-design/web-react';
 import { Info, Robot } from '@icon-park/react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import IdentitySection from './editor/IdentitySection';
 import PromptsSection from './editor/PromptsSection';
 import DefaultsSection from './editor/DefaultsSection';
 import RulesSection from './editor/RulesSection';
+import { isBrainbookSkillId } from '@/renderer/brainbook/brand';
 
 export type AssistantEditorSectionsProps = {
   editor: AssistantEditorViewModel;
@@ -142,6 +143,33 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   const showSkills = isCreating || activeAssistant !== null;
   const currentBackend = availableBackends.find((option) => option.id === editAgent);
   const editAgentRuntimeKey = currentBackend?.runtimeKey || '';
+  const isBrainbookCli = activeAssistant?.id === 'brainbook-cli';
+  const restrictBrainbookSkills = editAgentRuntimeKey === 'aionrs' && !isBrainbookCli;
+  const isSelectableSkill = (skillName: string) => !restrictBrainbookSkills || !isBrainbookSkillId(skillName);
+
+  useEffect(() => {
+    if (!restrictBrainbookSkills) return;
+
+    const allowedSelectedSkills = selectedSkills.filter((skillName) => !isBrainbookSkillId(skillName));
+    if (allowedSelectedSkills.length !== selectedSkills.length) {
+      setSelectedSkills(allowedSelectedSkills);
+    }
+
+    const protectedAutoSkillNames = builtinAutoSkills
+      .map((skill) => skill.name)
+      .filter(isBrainbookSkillId)
+      .filter((skillName) => !disabledBuiltinSkills.includes(skillName));
+    if (protectedAutoSkillNames.length > 0) {
+      setDisabledBuiltinSkills([...disabledBuiltinSkills, ...protectedAutoSkillNames]);
+    }
+  }, [
+    builtinAutoSkills,
+    disabledBuiltinSkills,
+    restrictBrainbookSkills,
+    selectedSkills,
+    setDisabledBuiltinSkills,
+    setSelectedSkills,
+  ]);
   const providerModelOptions = providers.flatMap((provider) =>
     getAvailableModels(provider).map((modelName) => ({
       key: `${provider.id}-${modelName}`,
@@ -242,10 +270,12 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
     const optionMap = new Map<string, { value: string; label: string; isAuto?: boolean; disabled?: boolean }>();
 
     pendingSkills.forEach((skill) => {
+      if (!isSelectableSkill(skill.name)) return;
       optionMap.set(skill.name, { value: skill.name, label: skill.name });
     });
 
     availableSkills.forEach((skill) => {
+      if (!isSelectableSkill(skill.name)) return;
       optionMap.set(skill.name, {
         value: skill.name,
         label: skill.name,
@@ -253,6 +283,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
     });
 
     builtinAutoSkills.forEach((skill) => {
+      if (!isSelectableSkill(skill.name)) return;
       optionMap.set(skill.name, {
         value: skill.name,
         label: skill.name,
@@ -261,18 +292,18 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
     });
 
     return Array.from(optionMap.values());
-  }, [availableSkills, builtinAutoSkills, pendingSkills, t]);
+  }, [availableSkills, builtinAutoSkills, pendingSkills, restrictBrainbookSkills]);
   const selectedSkillValues = useMemo(
     () =>
       Array.from(
         new Set([
-          ...selectedSkills,
+          ...selectedSkills.filter(isSelectableSkill),
           ...builtinAutoSkills
-            .filter((skill) => !disabledBuiltinSkills.includes(skill.name))
+            .filter((skill) => isSelectableSkill(skill.name) && !disabledBuiltinSkills.includes(skill.name))
             .map((skill) => skill.name),
         ])
       ),
-    [builtinAutoSkills, disabledBuiltinSkills, selectedSkills]
+    [builtinAutoSkills, disabledBuiltinSkills, restrictBrainbookSkills, selectedSkills]
   );
 
   const applyPromptItems = (items: string[]) => {
@@ -525,6 +556,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
         localeKey={localeKey}
         isBuiltin={isBuiltin}
         isReadOnlyAssistant={isReadOnlyAssistant}
+        canEditDefaultSkills={isBrainbookCli || !isReadOnlyAssistant}
         isCreating={isCreating}
         showSkills={showSkills}
         defaultModelMode={defaultModelMode}

@@ -37,6 +37,7 @@ type DefaultsSectionProps = {
   localeKey: string;
   isBuiltin: boolean;
   isReadOnlyAssistant: boolean;
+  canEditDefaultSkills?: boolean;
   isCreating: boolean;
   showSkills: boolean;
   defaultModelMode: 'auto' | 'fixed';
@@ -74,6 +75,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
   localeKey,
   isBuiltin,
   isReadOnlyAssistant,
+  canEditDefaultSkills,
   showSkills,
   defaultModelMode,
   setDefaultModelMode,
@@ -108,7 +110,8 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const canEditDefaultModelAndPermission = !isReadOnlyAssistant || isBuiltin;
-  const canEditDefaultSkillsAndMcps = !isReadOnlyAssistant;
+  const canEditSkills = canEditDefaultSkills ?? !isReadOnlyAssistant;
+  const canEditDefaultMcps = !isReadOnlyAssistant;
   const hasFixedThoughtLevelValue =
     defaultThoughtLevelMode === 'fixed' &&
     defaultThoughtLevelValue &&
@@ -278,7 +281,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
               </Button>
             }
           >
-            {canEditDefaultSkillsAndMcps ? (
+            {canEditSkills ? (
               <Select
                 className={styles.summarySelect}
                 getPopupContainer={getEditorSelectPopupContainer}
@@ -395,7 +398,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
             </Button>
           }
         >
-          {canEditDefaultSkillsAndMcps ? (
+          {canEditDefaultMcps ? (
             <Select
               className={styles.summarySelect}
               getPopupContainer={getEditorSelectPopupContainer}
