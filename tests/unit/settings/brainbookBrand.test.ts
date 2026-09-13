@@ -6,6 +6,7 @@ describe('BrainBook brand inventory', () => {
     expect(isBrainbookAssistantId('springboard')).toBe(true);
     expect(isBrainbookAssistantId('develop_user')).toBe(true);
     expect(isBrainbookSkillId('browser-automation')).toBe(true);
+    expect(isBrainbookSkillId('book-to-skill')).toBe(true);
     expect(isBrainbookSkillId('develop_user')).toBe(true);
   });
 
