@@ -6,6 +6,17 @@
 
 import type { SlashCommandItem } from './types';
 
+const GRAPHIFY_INSTALL_REMINDER = 'Requires a separately installed Graphify CLI (`uv tool install graphifyy`).';
+
+function getSkillDescription(
+  name: string,
+  descriptionByName: ReadonlyMap<string, string>,
+  fallbackDescription: string
+): string {
+  const description = descriptionByName.get(name) ?? fallbackDescription;
+  return name === 'graphify' ? `${description} ${GRAPHIFY_INSTALL_REMINDER}` : description;
+}
+
 /**
  * Builds slash command items for the skills loaded into the current
  * conversation. Skills are inserted as `/name ` templates (never executed
@@ -27,7 +38,7 @@ export function buildSkillSlashCommands(
   }
   return loadedSkills.map((name) => ({
     name,
-    description: descriptionByName.get(name) ?? fallbackDescription,
+    description: getSkillDescription(name, descriptionByName, fallbackDescription),
     kind: 'template',
     source: 'skill',
     selectionBehavior: 'insert',

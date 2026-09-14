@@ -32,6 +32,17 @@ describe('buildSkillSlashCommands', () => {
       { name: 'officecli', description: 'Skill', kind: 'template', source: 'skill', selectionBehavior: 'insert' },
     ]);
   });
+
+  it('reminds users that Graphify must be installed separately', () => {
+    const [command] = buildSkillSlashCommands(
+      ['graphify'],
+      new Map([['graphify', 'Build a project knowledge graph']]),
+      'Skill'
+    );
+
+    expect(command).toMatchObject({ name: 'graphify', source: 'skill', selectionBehavior: 'insert' });
+    expect(command.description).toContain('uv tool install graphifyy');
+  });
 });
 
 describe('mergeSlashCommands', () => {
