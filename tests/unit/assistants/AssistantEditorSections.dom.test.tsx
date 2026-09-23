@@ -998,10 +998,10 @@ describe('AssistantEditorSections', () => {
           },
           skills: {
             availableSkills: [
-              { name: 'browser-automation', description: '', location: '', is_custom: false, source: 'builtin' },
+              { name: 'book-to-skill', description: '', location: '', is_custom: false, source: 'builtin' },
               { name: 'cron', description: '', location: '', is_custom: false, source: 'builtin' },
             ],
-            selectedSkills: ['browser-automation', 'cron'],
+            selectedSkills: ['book-to-skill', 'cron'],
             setSelectedSkills,
             pendingSkills: [],
             setDeletePendingSkillName: vi.fn(),
@@ -1026,7 +1026,7 @@ describe('AssistantEditorSections', () => {
     await waitFor(() => expect(setSelectedSkills).toHaveBeenCalledWith(['cron']));
     fireEvent.click(screen.getByTestId('select-assistant-default-skills'));
     expect(await screen.findByText('cron')).toBeInTheDocument();
-    expect(screen.queryByText('browser-automation')).not.toBeInTheDocument();
+    expect(screen.queryByText('book-to-skill')).not.toBeInTheDocument();
   });
 
   it('renders single default-skill and default-mcp controls with hub links', () => {

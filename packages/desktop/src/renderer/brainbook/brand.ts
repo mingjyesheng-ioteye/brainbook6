@@ -24,7 +24,6 @@ const BRAINBOOK_ASSISTANT_IDS = new Set([
 const BRAINBOOK_SKILL_IDS = new Set([
   'arcmercer_user',
   'book-to-skill',
-  'browser-automation',
   'customer_support',
   'demo_user',
   'develop_user',

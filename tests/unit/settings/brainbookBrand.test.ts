@@ -5,7 +5,6 @@ describe('BrainBook brand inventory', () => {
   it('recognizes generated BrainBook assistant and protected skill IDs', () => {
     expect(isBrainbookAssistantId('springboard')).toBe(true);
     expect(isBrainbookAssistantId('develop_user')).toBe(true);
-    expect(isBrainbookSkillId('browser-automation')).toBe(true);
     expect(isBrainbookSkillId('book-to-skill')).toBe(true);
     expect(isBrainbookSkillId('develop_user')).toBe(true);
   });
@@ -15,6 +14,7 @@ describe('BrainBook brand inventory', () => {
     expect(isBrainbookAssistantId('brainbook-springboard')).toBe(false);
     expect(isBrainbookAssistantId('gstack')).toBe(false);
     expect(isBrainbookSkillId('cron')).toBe(false);
+    expect(isBrainbookSkillId('browser-automation')).toBe(false);
     expect(isBrainbookSkillId('gstack')).toBe(false);
   });
 
