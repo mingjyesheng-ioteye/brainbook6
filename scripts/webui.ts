@@ -233,6 +233,7 @@ async function main(): Promise<void> {
     staticDir,
     port,
     allowRemote,
+    backendLocalAuth: false,
     dataDir: workDir,
     logDir,
     // Surface the same work dir on /api/system/info so the browser UI shows

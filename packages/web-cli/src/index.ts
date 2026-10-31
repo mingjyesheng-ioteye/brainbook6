@@ -206,6 +206,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
       staticDir,
       port,
       allowRemote,
+      backendLocalAuth: false,
       dataDir,
       logDir,
       dirs: {

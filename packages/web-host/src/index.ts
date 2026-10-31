@@ -37,6 +37,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
       dataDir: opts.dataDir,
       logDir: opts.logDir,
       dirs: opts.dirs,
+      localAuth: opts.backendLocalAuth ?? true,
     });
   } else {
     // useExistingBackend: create a fake handle
