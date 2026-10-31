@@ -6,6 +6,8 @@
 
 import React, { useCallback } from 'react';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import { isElectronDesktop } from '@/renderer/utils/platform';
+import RemoteBrowserView from './RemoteBrowserView';
 import {
   BROWSER_BLANK_URL,
   BROWSER_SESSION_PARTITION,
@@ -64,6 +66,18 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({ url, tabId, onUrlChange, 
   const handleDidFinishLoad = useCallback(() => {
     if (url === BROWSER_BLANK_URL) onTitleChange(tabId, browserTabLabelFromUrl(url));
   }, [url, tabId, onTitleChange]);
+
+  if (!isElectronDesktop()) {
+    return (
+      <RemoteBrowserView
+        url={url}
+        tabId={tabId}
+        onUrlChange={onUrlChange}
+        onTitleChange={onTitleChange}
+        onFaviconChange={onFaviconChange}
+      />
+    );
+  }
 
   return (
     <WebviewHost

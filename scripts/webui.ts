@@ -234,6 +234,10 @@ async function main(): Promise<void> {
     port,
     allowRemote,
     backendLocalAuth: false,
+    browserdPort:
+      process.env.AIONUI_BROWSER_ENABLED === '0'
+        ? undefined
+        : Number(process.env.AIONUI_BROWSER_PORT || 25900),
     dataDir: workDir,
     logDir,
     // Surface the same work dir on /api/system/info so the browser UI shows

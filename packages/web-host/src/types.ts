@@ -39,6 +39,7 @@ export type WebHostOptions = {
   logDir?: string;
   dirs?: BackendSystemDirs;
   backendLocalAuth?: boolean;
+  browserdPort?: number;
   backend: { kind: 'ownBackend'; resolveBackend: BackendBinaryResolver } | { kind: 'useExistingBackend'; port: number };
 };
 

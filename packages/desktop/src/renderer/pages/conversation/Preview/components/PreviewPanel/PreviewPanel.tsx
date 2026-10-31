@@ -1226,7 +1226,7 @@ const PreviewPanel: React.FC = () => {
           // Show the "new browser tab" plus as soon as the panel holds any tab (file or
           // browser) instead of requiring the user to open a browser first. It stays
           // hidden only while the panel is empty, so the plus never appears alone.
-          onNewBrowserTab={previewTabs.length > 0 ? handleNewBrowserTab : undefined}
+          onNewBrowserTab={previewTabs.length > 0 || !isElectronDesktop() ? handleNewBrowserTab : undefined}
         />
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）

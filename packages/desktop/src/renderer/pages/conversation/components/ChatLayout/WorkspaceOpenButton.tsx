@@ -48,6 +48,7 @@ const isExternalTool = (tool: ToolType): tool is ExternalToolType => tool !== 'b
  */
 const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath, isTemporary }) => {
   const { t } = useTranslation();
+  const isDesktop = isElectronDesktop();
   /**
    * 预览上下文是可选的：本组件主要负责拉起外部程序，浏览器只是附带的一项。
    * 拿不到上下文时（例如在没有 PreviewProvider 的场景里渲染文件树）就隐藏
@@ -73,7 +74,7 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
       setPreferredTool(saved);
     }
 
-    if (isTemporary) return;
+    if (isTemporary || !isDesktop) return;
 
     const checkTools = async () => {
       try {
@@ -115,19 +116,19 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
         key: 'vscode',
         label: t('conversation.workspace.openWith.vscode', { defaultValue: 'VS Code' }),
         icon: <Command size={16} />,
-        available: !isTemporary && vscodeInstalled,
+        available: isDesktop && !isTemporary && vscodeInstalled,
       },
       {
         key: 'terminal',
         label: t('conversation.workspace.openWith.terminal', { defaultValue: 'Terminal' }),
         icon: <Terminal size={16} />,
-        available: !isTemporary,
+        available: isDesktop && !isTemporary,
       },
       {
         key: 'explorer',
         label: t('conversation.workspace.openWith.explorer', { defaultValue: 'File Explorer' }),
         icon: <FolderOpen size={16} />,
-        available: !isTemporary,
+        available: isDesktop && !isTemporary,
       },
       {
         key: 'browser',
@@ -136,7 +137,7 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
         available: Boolean(openBrowserTab),
       },
     ],
-    [t, isTemporary, vscodeInstalled, openBrowserTab]
+    [t, isDesktop, isTemporary, vscodeInstalled, openBrowserTab]
   );
 
   // Filter only available tools
@@ -170,13 +171,7 @@ const WorkspaceOpenButton: React.FC<WorkspaceOpenButtonProps> = ({ workspacePath
       ? t('conversation.workspace.openWith.browser', { defaultValue: 'Browser' })
       : t('conversation.workspace.openWorkspace', { defaultValue: 'Open workspace folder' });
 
-  // Don't render in WebUI/browser mode: shell tools would run on the server with
-  // no visible feedback, and the in-app browser needs Electron's <webview>.
-  if (!isElectronDesktop()) return null;
-
-  // 一个可用项都没有时不渲染（临时工作区 + 无预览上下文），否则会留下一个点了没反应的按钮
-  // Nothing available (temp workspace with no preview context): render nothing rather
-  // than a button that does nothing when clicked.
+  // WebUI has no shell tools, but the in-app browser is still available.
   if (availableOptions.length === 0) return null;
 
   const dropdownList = (

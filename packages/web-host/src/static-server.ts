@@ -18,6 +18,7 @@ import serveHandler from 'serve-handler';
 export type StaticServerOptions = {
   staticDir: string;
   backendPort: number;
+  browserdPort?: number;
   port?: number;
   allowRemote?: boolean;
 };
@@ -76,13 +77,18 @@ function getLanIP(): string | null {
   return pickLanIP(networkInterfaces());
 }
 
-function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+function forwardToUpstream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  targetPort: number,
+  errorCode: string
+): void {
   const options: http.RequestOptions = {
     hostname: '127.0.0.1',
-    port: backendPort,
+    port: targetPort,
     path: req.url,
     method: req.method,
-    headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
+    headers: { ...req.headers, host: `127.0.0.1:${targetPort}` },
   };
   const proxy = http.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
@@ -91,7 +97,7 @@ function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort
   proxy.on('error', () => {
     if (!res.headersSent) {
       res.writeHead(502, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'BACKEND_UNREACHABLE' }));
+      res.end(JSON.stringify({ error: errorCode }));
     } else {
       res.destroy();
     }
@@ -152,11 +158,13 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
  * Keeping the rule simple means we can decide after the first ~50 bytes
  * instead of waiting for the full header block.
  */
-function peekWsRoute(buf: Buffer): boolean | null {
+function peekWsRoute(buf: Buffer): 'backend' | 'browser' | 'http' | null {
   const newlineIdx = buf.indexOf(0x0a); // \n
   if (newlineIdx < 0) return null;
   const firstLine = buf.slice(0, newlineIdx).toString('ascii');
-  return /^GET\s+\/(?:ws|api\/stt\/stream)(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine);
+  if (/^GET\s+\/api\/browser\/ws(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine)) return 'browser';
+  if (/^GET\s+\/(?:ws|api\/stt\/stream)(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine)) return 'backend';
+  return 'http';
 }
 
 export async function startStaticServer(opts: StaticServerOptions): Promise<StaticServerHandle> {
@@ -183,8 +191,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       // /api/* — reverse proxy to backend (includes /api/auth/*).
       // Auth POSTs reach Core; GET /login must still render the SPA.
       const isAuthPost = req.method === 'POST' && (req.url === '/login' || req.url === '/logout');
+      if (opts.browserdPort && (req.url.startsWith('/api/browser/') || req.url.startsWith('/api/browser?'))) {
+        forwardToUpstream(req, res, opts.browserdPort, 'BROWSER_UNREACHABLE');
+        return;
+      }
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || isAuthPost) {
-        forwardToBackend(req, res, opts.backendPort);
+        forwardToUpstream(req, res, opts.backendPort, 'BACKEND_UNREACHABLE');
         return;
       }
 
@@ -235,7 +247,15 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       const decision = peekWsRoute(peeked);
       if (decision === null && peeked.length < PEEK_LIMIT_BYTES) return;
       cleanup();
-      const target = decision === true ? opts.backendPort : internalPort;
+      let target = internalPort;
+      if (decision === 'backend') target = opts.backendPort;
+      if (decision === 'browser') {
+        if (!opts.browserdPort) {
+          client.destroy();
+          return;
+        }
+        target = opts.browserdPort;
+      }
       spliceToTcpEndpoint(client, target, peeked);
     };
     const onEarlyError = (): void => {
