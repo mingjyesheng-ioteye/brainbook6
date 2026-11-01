@@ -9,7 +9,6 @@ import type { PreviewContentType } from '@/common/types/office/preview';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import { chatFileRefKey, isChatFileRef } from '@/common/types/chatFile';
 import { emitter } from '@/renderer/utils/emitter';
-import { isElectronDesktop } from '@/renderer/utils/platform';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BROWSER_BLANK_URL, BROWSER_TAB_FALLBACK_TITLE, MAX_BROWSER_TABS } from '../browser/constants';
 import { isBrowserMcpActivity, isBrowserMcpSettled } from '../browser/agentActivity';
@@ -64,6 +63,7 @@ export interface PreviewMetadata {
   missingFile?: boolean; // 文件不存在或无法读取 / Whether the referenced file is missing or unreadable
   favicon?: string; // 浏览器 tab 的站点图标 URL / Site icon URL for browser tabs
   agentActive?: boolean; // Agent 正在操作该浏览器 tab / Agent is currently driving this browser tab
+  browserSurfaceId?: string; // 绑定到 browserd 已有会话 / Bind to an existing browserd surface
 }
 
 export interface PreviewTab {
@@ -84,6 +84,11 @@ export interface OpenPreviewOptions {
    * tab to avoid losing changes).
    */
   replace?: boolean;
+  /**
+   * Always create a fresh tab, even when an equivalent tab is already open.
+   * Used by the browser so every browser tab gets its own surface/session.
+   */
+  forceNew?: boolean;
 }
 
 /**
@@ -132,7 +137,7 @@ export interface PreviewContextValue {
    * 打开浏览器 tab，省略 url 则开空白页。
    * Open a browser tab; blank page when url is omitted.
    */
-  openBrowserTab: (url?: string) => void;
+  openBrowserTab: (url?: string, surfaceId?: string) => void;
   closePreview: () => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
@@ -769,7 +774,9 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       // 已打开同一内容：聚焦现有 tab，不新建 / Same content already open: focus it
-      const existingTab = findPreviewTabInList(currentTabs, type, new_content, meta);
+      const existingTab = options?.forceNew
+        ? null
+        : findPreviewTabInList(currentTabs, type, new_content, meta);
 
       // 浏览器 tab 上限：满了就复用最旧的一个，并给 UI 一个可提示的信号
       // Browser tab cap: when full, reuse the oldest and raise a signal the UI can
@@ -876,18 +883,15 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
    * points, and they must agree on the blank address and fallback title.
    */
   const openBrowserTab = useCallback(
-    (url?: string) => {
-      if (!isElectronDesktop() && !url?.trim()) {
-        const existing = tabs.find((tab) => tab.content_type === 'browser');
-        if (existing) {
-          setIsOpen(true);
-          setActiveTabId(existing.id);
-          return;
-        }
-      }
-      openPreview(url?.trim() || BROWSER_BLANK_URL, 'browser');
+    (url?: string, surfaceId?: string) => {
+      openPreview(
+        url?.trim() || BROWSER_BLANK_URL,
+        'browser',
+        surfaceId ? { browserSurfaceId: surfaceId } : undefined,
+        { forceNew: true }
+      );
     },
-    [openPreview, tabs]
+    [openPreview]
   );
 
   /**
