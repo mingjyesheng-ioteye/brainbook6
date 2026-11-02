@@ -336,26 +336,32 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     try {
       await httpRequest('POST', '/api/brainbook/auth/logout');
-      const csrfToken = resolveCoreCsrfToken();
-      const response = await fetch('/logout', {
-        method: 'POST',
-        // Logout also needs CSRF token / 登出同样需要 CSRF Token
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) throw new Error('Sign-out failed');
     } catch (error) {
-      console.error('Logout request failed:', error);
-      throw error;
+      // The BrainBook logout clears the same session cookie as /logout. Only
+      // fall back to the local endpoint when the BrainBook request itself
+      // failed, and never block the UI transition on a second failure.
+      console.warn('BrainBook logout failed, trying local logout:', error);
+      try {
+        const csrfToken = resolveCoreCsrfToken();
+        const response = await fetch('/logout', {
+          method: 'POST',
+          // Logout also needs CSRF token / 登出同样需要 CSRF Token
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+          },
+          credentials: 'include',
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) throw new Error('Sign-out failed');
+      } catch (fallbackError) {
+        console.warn('Local logout failed:', fallbackError);
+      }
     }
     setUser(null);
     setStatus('unauthenticated');
     clearAuthCache();
-    window.location.replace('/login');
+    window.location.replace('/#/login');
   }, []);
 
   const value = useMemo<AuthContextValue>(
