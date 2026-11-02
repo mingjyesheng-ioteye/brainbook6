@@ -26,6 +26,7 @@ type AgentCardProps =
       onTestConnection: () => void;
       onConfigure: () => void;
       isTesting?: boolean;
+      onToggle?: (enabled: boolean) => void;
     }
   | {
       type: 'custom';
@@ -107,7 +108,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
   const { agent, boundAssistants, onTestConnection, onConfigure, isTesting } = props;
 
   const isCustom = props.type === 'custom';
-  const isDisabled = isCustom && agent.enabled === false;
+  const isDisabled = agent.enabled === false;
   const diagnostics = formatManagedAgentDiagnosticMessage(t, agent);
   const displayStatus = resolveDisplayStatus(agent.status, agent.last_check_error_code);
 
@@ -190,11 +191,13 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
         >
           {t('common.edit', { defaultValue: 'Edit' })}
         </Button>
+        {props.onToggle ? (
+          <Switch size='small' checked={agent.enabled !== false} onChange={props.onToggle} />
+        ) : null}
         {props.type === 'custom' ? (
           <>
             {/* Custom agents add the definition editor (command/args/env) plus
-                enable/delete — controls that have no meaning for built-ins. */}
-            <Switch size='small' checked={agent.enabled !== false} onChange={props.onToggle} />
+                delete; enable/disable is shared with official agents above. */}
             <Button
               size='small'
               type='outline'

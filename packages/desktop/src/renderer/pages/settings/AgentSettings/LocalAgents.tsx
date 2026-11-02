@@ -101,13 +101,13 @@ const LocalAgents: React.FC = () => {
     [refreshCatalog]
   );
 
-  const handleToggleCustomAgent = useCallback(
+  const handleToggleAgent = useCallback(
     async (agentId: string, enabled: boolean) => {
       try {
         await ipcBridge.acpConversation.setAgentEnabled.invoke({ id: agentId, enabled });
         await refreshCatalog();
       } catch (err) {
-        console.error('toggle custom agent failed:', err);
+        console.error('toggle agent failed:', err);
         Message.error(parseError(err));
       }
     },
@@ -280,6 +280,7 @@ const LocalAgents: React.FC = () => {
               onTestConnection={() => void handleTestConnection(agent.id)}
               onConfigure={() => openAgentConfig(agent.id)}
               isTesting={testingAgentId === agent.id}
+              onToggle={(enabled) => void handleToggleAgent(agent.id, enabled)}
             />
           ))}
           {visibleOfficialAgents.length === 0 && (
@@ -357,7 +358,7 @@ const LocalAgents: React.FC = () => {
                 setEditorVisible(true);
               }}
               onDelete={() => void handleDeleteCustomAgent(agent.id)}
-              onToggle={(enabled) => void handleToggleCustomAgent(agent.id, enabled)}
+              onToggle={(enabled) => void handleToggleAgent(agent.id, enabled)}
             />
           ))}
           {visibleCustomAgents.length === 0 ? (
