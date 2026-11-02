@@ -18,15 +18,29 @@ function getBaseUrl(): string {
   return `http://127.0.0.1:${port}`;
 }
 
+function readCsrfToken(): string {
+  if (typeof document === 'undefined') return '';
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('aionui-csrf-token='));
+  return cookie ? cookie.slice('aionui-csrf-token='.length) : '';
+}
+
 async function fetchJson<T>(method: string, path: string, body?: unknown): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
   const headers: Record<string, string> = {};
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
+  const csrfToken = readCsrfToken();
+  if (csrfToken) {
+    headers['x-csrf-token'] = csrfToken;
+  }
   const response = await fetch(url, {
     method,
     headers,
+    credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
