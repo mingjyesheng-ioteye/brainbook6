@@ -15,6 +15,8 @@ export interface BrowserTabLayerProps {
   activeTabId: string | null;
   /** 回写 tab 字段 / Patch fields back onto a tab */
   updateTab: (tabId: string, patch: PreviewTabPatch) => void;
+  /** 关联的会话 ID / Associated conversation ID */
+  conversationId?: string;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface BrowserTabLayerProps {
  * survives. Inactive tabs are hidden via `visibility` rather than `display:none`
  * so they retain real dimensions and need no relayout when shown again.
  */
-const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTabId, updateTab }) => {
+const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTabId, updateTab, conversationId }) => {
   const handleUrlChange = useCallback(
     (tabId: string, url: string) => {
       // 地址存在 content 里，与其他 tab 类型保持一致 / Address lives in content, like other tab types
@@ -73,6 +75,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
               url={tab.content}
               tabId={tab.id}
               surfaceId={tab.metadata?.browserSurfaceId}
+              conversationId={conversationId}
               onUrlChange={handleUrlChange}
               onTitleChange={handleTitleChange}
               onFaviconChange={handleFaviconChange}

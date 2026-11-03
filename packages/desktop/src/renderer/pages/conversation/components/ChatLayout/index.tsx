@@ -319,7 +319,7 @@ const ChatLayout: React.FC<{
                     lineStyle: { width: '2px' },
                   })}
                 <div className={classNames('h-full w-full overflow-hidden', isDesktop ? '' : 'rounded-[15px]')}>
-                  <PreviewPanel />
+                  <PreviewPanel conversationId={conversation_id} />
                 </div>
               </div>
             )}

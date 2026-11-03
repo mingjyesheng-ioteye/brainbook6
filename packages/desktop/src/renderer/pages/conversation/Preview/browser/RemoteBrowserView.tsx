@@ -7,6 +7,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Left, Right, Refresh, Loading, History, Close } from '@icon-park/react';
+import { refreshSession } from '@/common/adapter/sessionRefresh';
 import { usePreviewContext } from '../context/PreviewContext';
 import { BROWSER_BLANK_URL, browserTabLabelFromUrl, resolveAddressBarInput } from './constants';
 
@@ -14,6 +15,7 @@ export interface RemoteBrowserViewProps {
   url: string;
   tabId: string;
   surfaceId?: string;
+  conversationId?: string;
   onUrlChange: (tabId: string, url: string) => void;
   onTitleChange: (tabId: string, title: string) => void;
   onFaviconChange: (tabId: string, favicon: string) => void;
@@ -73,6 +75,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
   url,
   tabId,
   surfaceId,
+  conversationId,
   onUrlChange,
   onTitleChange,
 }) => {
@@ -130,12 +133,23 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       setError(null);
       setLoading(true);
       try {
-        const response = await fetch('/api/browser/session', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ surfaceId: effectiveSurfaceId }),
-        });
+        const requestSession = () =>
+          fetch('/api/browser/session', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ surfaceId: effectiveSurfaceId, conversationId }),
+          });
+        let response = await requestSession();
+        // The access cookie is short-lived. Switching conversations remounts this
+        // tab and re-POSTs the session, which can land right after expiry — the
+        // rest of the app silently refreshes, so do the same and replay once
+        // instead of surfacing a permanent 401 banner.
+        if (response.status === 401) {
+          const refreshed = await refreshSession();
+          if (cancelled) return;
+          if (refreshed) response = await requestSession();
+        }
         if (!response.ok) {
           throw new Error(`Browser service unavailable (${response.status})`);
         }
@@ -214,7 +228,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       socket?.close();
       if (socketRef.current === socket) socketRef.current = null;
     };
-  }, [drawFrame, effectiveSurfaceId, openBrowserTab, reconnectKey, tabId]);
+  }, [conversationId, drawFrame, effectiveSurfaceId, openBrowserTab, reconnectKey, tabId]);
 
   const navigate = useCallback(
     (raw: string) => {
@@ -346,9 +360,10 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
     if (!sessionId) return;
     setActivityLoading(true);
     try {
+      const query = `sessionId=${encodeURIComponent(sessionId)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
       const [replayResponse, filesResponse] = await Promise.all([
-        fetch(`/api/browser/replay?sessionId=${encodeURIComponent(sessionId)}`, { credentials: 'include' }),
-        fetch(`/api/browser/files?sessionId=${encodeURIComponent(sessionId)}`, { credentials: 'include' }),
+        fetch(`/api/browser/replay?${query}`, { credentials: 'include' }),
+        fetch(`/api/browser/files?${query}`, { credentials: 'include' }),
       ]);
       const replay = (await replayResponse.json().catch(() => ({ entries: [] as ReplayEntry[] }))) as {
         entries?: ReplayEntry[];
@@ -361,7 +376,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
     } finally {
       setActivityLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, conversationId]);
 
   const toggleActivity = useCallback(() => {
     setActivityOpen((open) => {
@@ -486,7 +501,10 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
           </div>
         )}
         {activityOpen && (
-          <div className='absolute inset-y-0 end-0 w-360px max-w-full bg-bg-1 border-s border-border-1 flex flex-col z-20'>
+          <div
+            className='absolute inset-y-0 end-0 w-360px max-w-full border-s border-border-1 flex flex-col z-20'
+            style={{ backgroundColor: '#1a1a1a', color: '#e5e5e5' }}
+          >
             <div className='flex items-center justify-between h-36px px-10px border-b border-border-1 flex-shrink-0'>
               <span className='text-12px font-600'>Activity</span>
               <button

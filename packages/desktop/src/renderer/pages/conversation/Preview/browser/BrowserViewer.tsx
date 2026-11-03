@@ -22,6 +22,8 @@ export interface BrowserViewerProps {
   tabId: string;
   /** 可选的 browserd 会话 surface / Optional browserd surface id */
   surfaceId?: string;
+  /** 关联的会话 ID / Associated conversation ID */
+  conversationId?: string;
   /** 地址变化时回写 tab（用于持久化）/ Persist the new address back onto the tab */
   onUrlChange: (tabId: string, url: string) => void;
   /** 页面标题变化时回写 tab / Persist the page title back onto the tab */
@@ -47,6 +49,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
   url,
   tabId,
   surfaceId,
+  conversationId,
   onUrlChange,
   onTitleChange,
   onFaviconChange,
@@ -82,6 +85,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
         url={url}
         tabId={tabId}
         surfaceId={surfaceId}
+        conversationId={conversationId}
         onUrlChange={onUrlChange}
         onTitleChange={onTitleChange}
         onFaviconChange={onFaviconChange}

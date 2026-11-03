@@ -84,7 +84,7 @@ class SaveRefusedError extends Error {
   }
 }
 
-const PreviewPanel: React.FC = () => {
+const PreviewPanel: React.FC<{ conversationId?: string }> = ({ conversationId }) => {
   const { t, i18n } = useTranslation();
   const {
     isOpen,
@@ -1272,7 +1272,7 @@ const PreviewPanel: React.FC = () => {
 
         {/* 浏览器层：常驻挂载，切 tab 不重新加载页面
             Browser layer: always mounted so tab switches don't reload pages */}
-        <BrowserTabLayer browserTabs={browserTabs} activeTabId={activeTabId} updateTab={updateTab} />
+        <BrowserTabLayer browserTabs={browserTabs} activeTabId={activeTabId} updateTab={updateTab} conversationId={conversationId} />
 
         {/* Tab 右键菜单 / Tab context menu */}
         {/* eslint-disable-next-line max-len */}

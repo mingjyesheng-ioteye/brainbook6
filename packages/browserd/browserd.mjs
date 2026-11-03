@@ -49,6 +49,122 @@ function log(...args) {
   console.log(new Date().toISOString(), ...args);
 }
 
+// Replay lookup tables. Live sessions are keyed by id; closed sessions are
+// recovered from the `session.json` manifest written into each replay dir, so
+// replay keeps working after the browser page (and the session object) is gone.
+const replayIndex = new Map();
+const conversationIndex = new Map();
+
+function indexManifest(manifest) {
+  if (!manifest || !manifest.sessionId) return;
+  replayIndex.set(manifest.sessionId, manifest);
+  const conversationId = manifest.conversationId;
+  if (conversationId) {
+    if (!conversationIndex.has(conversationId)) conversationIndex.set(conversationId, new Set());
+    conversationIndex.get(conversationId).add(manifest.sessionId);
+  }
+}
+
+function manifestPathFor(session) {
+  return path.join(session.replayDir, 'session.json');
+}
+
+function writeSessionManifest(session, extra = {}) {
+  let url = '';
+  try {
+    url = session.page && !session.page.isClosed() ? session.page.url() : '';
+  } catch {
+    url = '';
+  }
+  const manifest = {
+    sessionId: session.id,
+    userId: session.userId,
+    surfaceId: session.surfaceId,
+    owner: session.owner,
+    conversationId: session.conversationId || null,
+    createdAt: session.createdAt,
+    updatedAt: Date.now(),
+    closedAt: session.closed ? Date.now() : null,
+    url,
+    title: session.title || '',
+    replayDir: session.replayDir,
+    ...extra,
+  };
+  try {
+    fs.writeFileSync(manifestPathFor(session), JSON.stringify(manifest) + '\n', { mode: 0o600 });
+    indexManifest(manifest);
+  } catch (error) {
+    log('session manifest write failed', error?.message || error);
+  }
+  return manifest;
+}
+
+function loadReplayIndex() {
+  try {
+    for (const userDir of fs.readdirSync(REPLAY_DIR, { withFileTypes: true })) {
+      if (!userDir.isDirectory()) continue;
+      const userPath = path.join(REPLAY_DIR, userDir.name);
+      for (const sessionDir of fs.readdirSync(userPath, { withFileTypes: true })) {
+        if (!sessionDir.isDirectory()) continue;
+        const manifestFile = path.join(userPath, sessionDir.name, 'session.json');
+        if (!fs.existsSync(manifestFile)) continue;
+        try {
+          const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+          manifest.replayDir = manifest.replayDir || path.join(userPath, sessionDir.name);
+          indexManifest(manifest);
+        } catch {
+          // ignore malformed manifests
+        }
+      }
+    }
+  } catch (error) {
+    log('replay index load failed', error?.message || error);
+  }
+}
+
+function readTimelineEntries(dir, conversationId = null) {
+  const file = path.join(dir, 'timeline.jsonl');
+  if (!fs.existsSync(file)) return [];
+  const entries = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
+    try {
+      const entry = JSON.parse(line);
+      if (conversationId && entry.conversationId && entry.conversationId !== conversationId) continue;
+      entries.push(entry);
+    } catch {
+      // ignore malformed lines
+    }
+  }
+  return entries;
+}
+
+function resolveReplayDirs(userId, sessionId, conversationId) {
+  const dirs = new Set();
+  const manifests = [];
+  if (sessionId) {
+    const live = findSession(userId, sessionId);
+    if (live) {
+      dirs.add(live.replayDir);
+      manifests.push(meta(live));
+    }
+    const manifest = replayIndex.get(sessionId);
+    if (manifest && manifest.userId === userId) {
+      dirs.add(manifest.replayDir);
+      if (!live) manifests.push(manifest);
+    }
+  }
+  if (conversationId) {
+    for (const id of conversationIndex.get(conversationId) || []) {
+      const manifest = replayIndex.get(id);
+      if (!manifest || manifest.userId !== userId) continue;
+      dirs.add(manifest.replayDir);
+      const live = findSession(userId, id);
+      manifests.push(live ? { ...manifest, ...meta(live), closedAt: null } : manifest);
+    }
+  }
+  return { dirs: [...dirs], manifests };
+}
+
 function audit(entry) {
   try {
     fs.appendFileSync(path.join(DATA_DIR, 'audit.jsonl'), JSON.stringify({ ts: Date.now(), ...entry }) + '\n', {
@@ -98,17 +214,75 @@ function hasControlToken(req) {
   return req.headers['x-browserd-token'] === CONTROL_TOKEN;
 }
 
+// Authentication cache. Every browser API request and WebSocket upgrade used to
+// call AUTH_URL afresh, and AionCore rate-limits that endpoint (20/min per user).
+// Rapid conversation switching remounts each browser tab, so a handful of tabs
+// produced dozens of auth checks a minute and the endpoint answered 429. This
+// code treated any non-ok status as "not logged in" and returned 401, which the
+// UI surfaced as "Browser service unavailable (401)" even though the session was
+// perfectly valid. Cache the resolved user per cookie for a short TTL instead, so
+// a burst of requests shares one upstream check, and degrade gracefully when the
+// upstream throttles us rather than reporting a session failure.
+const AUTH_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX_ENTRIES = 200;
+const authCache = new Map(); // cookie -> { user, expiresAt }
+
+function readAuthCache(cookie) {
+  const entry = authCache.get(cookie);
+  if (!entry) return null;
+  if (entry.expiresAt > Date.now()) return entry.user;
+  return null;
+}
+
+function rememberAuth(cookie, user) {
+  if (authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+    // Evict the entry closest to expiry; cookies are opaque so there is no LRU
+    // signal beyond the TTL we stamped.
+    let oldestKey = null;
+    let oldestExpiry = Infinity;
+    for (const [key, entry] of authCache) {
+      if (entry.expiresAt < oldestExpiry) {
+        oldestExpiry = entry.expiresAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey !== null) authCache.delete(oldestKey);
+  }
+  authCache.set(cookie, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+}
+
 async function authenticate(req) {
   const cookie = req.headers.cookie;
   if (!cookie) return null;
+  const cached = readAuthCache(cookie);
+  if (cached) return cached;
   try {
     const response = await fetch(AUTH_URL, {
       headers: { cookie },
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) return null;
+    if (response.status === 429) {
+      // Rate limited: the session itself is not in question — AionCore is only
+      // refusing to answer. Serve a recently cached user if we have one so a
+      // burst of tab remounts does not turn into a 401 storm. Without a cached
+      // user we cannot vouch for the cookie, so report unauthenticated.
+      const stale = authCache.get(cookie);
+      if (stale) {
+        rememberAuth(cookie, stale.user);
+        return stale.user;
+      }
+      return null;
+    }
+    if (!response.ok) {
+      authCache.delete(cookie);
+      return null;
+    }
     const data = await response.json();
-    if (!data?.success || !data?.user?.id) return null;
+    if (!data?.success || !data?.user?.id) {
+      authCache.delete(cookie);
+      return null;
+    }
+    rememberAuth(cookie, data.user);
     return data.user;
   } catch {
     return null;
@@ -162,16 +336,42 @@ function meta(session) {
     sessionId: session.id,
     surfaceId: session.surfaceId,
     owner: session.owner,
+    conversationId: session.conversationId || null,
     url: session.page.url(),
     title: session.title || '',
     lastActive: session.lastActive,
   };
 }
 
-function listSessions(userId) {
-  return [...sessions.values()]
+function listSessions(userId, conversationId = null) {
+  const active = [...sessions.values()]
     .filter((session) => session.userId === userId && !session.closed)
-    .map(meta);
+    .filter((session) => !conversationId || session.conversationId === conversationId)
+    .map((session) => ({ ...meta(session), replayable: true }));
+
+  // Merge in archived sessions recovered from replay manifests. Active sessions
+  // shadow their manifest, so a session never shows up twice.
+  const archived = [];
+  for (const manifest of replayIndex.values()) {
+    if (manifest.userId !== userId) continue;
+    if (conversationId && manifest.conversationId !== conversationId) continue;
+    if (sessions.has(`${manifest.userId}::${manifest.surfaceId}`) && findSession(userId, manifest.sessionId)) continue;
+    const activeEntry = active.find((entry) => entry.sessionId === manifest.sessionId);
+    if (activeEntry) continue;
+    archived.push({
+      sessionId: manifest.sessionId,
+      surfaceId: manifest.surfaceId,
+      owner: manifest.owner,
+      conversationId: manifest.conversationId || null,
+      url: manifest.url || '',
+      title: manifest.title || '',
+      lastActive: manifest.updatedAt,
+      closedAt: manifest.closedAt,
+      replayable: true,
+      archived: true,
+    });
+  }
+  return [...active, ...archived];
 }
 
 function findSession(userId, sessionId) {
@@ -180,6 +380,38 @@ function findSession(userId, sessionId) {
   }
   return null;
 }
+
+/**
+ * Resolve replay data for a session id, whether the browser session is still
+ * live or was closed and only its on-disk replay manifest remains. Returns
+ * `{ replayDir, manifest }` or null when the id is unknown / belongs to
+ * another user. Live sessions take precedence over the indexed manifest.
+ */
+function resolveReplaySession(userId, sessionId) {
+  const live = findSession(userId, sessionId);
+  if (live) {
+    return {
+      replayDir: live.replayDir,
+      manifest: {
+        sessionId: live.id,
+        userId: live.userId,
+        surfaceId: live.surfaceId,
+        owner: live.owner,
+        conversationId: live.conversationId || null,
+        createdAt: live.createdAt,
+        updatedAt: Date.now(),
+        closedAt: null,
+        title: live.title || '',
+        replayDir: live.replayDir,
+      },
+    };
+  }
+  const manifest = replayIndex.get(sessionId);
+  if (!manifest || manifest.userId !== userId) return null;
+  return { replayDir: manifest.replayDir, manifest };
+}
+
+
 
 async function ensureUserBrowser(userId) {
   const existing = userBrowsers.get(userId);
@@ -242,7 +474,7 @@ async function attachPopup(userId, userBrowser, page) {
         .filter((session) => session.userId === userId && !session.closed)
         .sort((a, b) => b.lastActive - a.lastActive)[0];
   const surfaceId = `popup-${crypto.randomBytes(4).toString('hex')}`;
-  const session = await setupSession(userId, surfaceId, 'user', userBrowser, page);
+  const session = await setupSession(userId, surfaceId, 'user', userBrowser, page, openerSession?.conversationId || null);
   const message = { type: 'popup', session: meta(session) };
   if (openerSession && !openerSession.closed) {
     broadcast(openerSession, message);
@@ -252,15 +484,43 @@ async function attachPopup(userId, userBrowser, page) {
   log('popup session created', session.id, 'user', userId, 'surface', session.surfaceId);
 }
 
-async function createSession(userId, surfaceId, owner) {
+/**
+ * Pick a session that can safely be closed to make room for a new one.
+ *
+ * UI preview tabs each get a session, and a closed tab only releases its
+ * session after the idle sweep. When the cap is reached, reclaim the
+ * least-recently-active session that has no connected client and does not
+ * belong to an agent (agent sessions may be mid-task between tool calls).
+ */
+function pickEvictableSession(userId) {
+  let victim = null;
+  for (const session of sessions.values()) {
+    if (session.closed || session.userId !== userId) continue;
+    if (session.owner === 'agent') continue;
+    if (session.clients.size > 0) continue;
+    if (!victim || session.lastActive < victim.lastActive) victim = session;
+  }
+  return victim;
+}
+
+async function createSession(userId, surfaceId, owner, conversationId = null) {
   const key = sessionKey(userId, surfaceId);
   const existing = sessions.get(key);
   if (existing && !existing.closed) {
     existing.lastActive = Date.now();
+    if (!existing.conversationId && conversationId) {
+      existing.conversationId = conversationId;
+      writeSessionManifest(existing);
+    }
     return existing;
   }
   if (sessions.size >= MAX_SESSIONS) {
-    throw new Error('browser session limit reached');
+    const victim = pickEvictableSession(userId);
+    if (!victim) {
+      throw new Error('browser session limit reached');
+    }
+    log('session limit reached; evicting idle session', victim.id, 'surface', victim.surfaceId);
+    await closeSession(victim);
   }
   const userBrowser = await ensureUserBrowser(userId);
   let page;
@@ -276,10 +536,10 @@ async function createSession(userId, surfaceId, owner) {
   }
   userBrowser.initialPageUsed = true;
   userBrowser.managedPages.add(page);
-  return setupSession(userId, surfaceId, owner, userBrowser, page);
+  return setupSession(userId, surfaceId, owner, userBrowser, page, conversationId);
 }
 
-async function setupSession(userId, surfaceId, owner, userBrowser, page) {
+async function setupSession(userId, surfaceId, owner, userBrowser, page, conversationId = null) {
   const key = sessionKey(userId, surfaceId);
   const cdp = await userBrowser.context.newCDPSession(page);
   await cdp.send('Page.enable');
@@ -289,6 +549,8 @@ async function setupSession(userId, surfaceId, owner, userBrowser, page) {
     userId,
     surfaceId: surfaceId || 'default',
     owner: owner || 'user',
+    conversationId: conversationId || null,
+    createdAt: Date.now(),
     context: userBrowser.context,
     userBrowser,
     page,
@@ -307,6 +569,7 @@ async function setupSession(userId, surfaceId, owner, userBrowser, page) {
   };
   session.replayDir = path.join(REPLAY_DIR, safeUserId(userId), session.id);
   fs.mkdirSync(session.replayDir, { recursive: true, mode: 0o700 });
+  writeSessionManifest(session);
 
   const sendStateSoon = () => {
     void sendState(session);
@@ -347,13 +610,20 @@ async function setupSession(userId, surfaceId, owner, userBrowser, page) {
   });
   sessions.set(key, session);
   userBrowser.sessions.add(session.id);
-  audit({ userId, source: 'system', action: 'session.create', surfaceId: session.surfaceId, owner: session.owner });
+  audit({
+    userId,
+    source: 'system',
+    action: 'session.create',
+    surfaceId: session.surfaceId,
+    owner: session.owner,
+    conversationId: session.conversationId || null,
+  });
   log('session created', session.id, 'user', userId, 'surface', session.surfaceId, 'owner', session.owner);
   return session;
 }
 
-async function ensureSession(userId, surfaceId, owner) {
-  return createSession(userId, surfaceId || 'default', owner || 'user');
+async function ensureSession(userId, surfaceId, owner, conversationId = null) {
+  return createSession(userId, surfaceId || 'default', owner || 'user', conversationId);
 }
 
 function broadcast(session, message) {
@@ -446,12 +716,14 @@ async function captureReplay(session, source, action, extra = {}) {
       ts,
       source,
       action,
+      conversationId: session.conversationId || null,
       url: session.page.url(),
       title: session.title || '',
       screenshot: filename,
       ...extra,
     };
     fs.appendFileSync(path.join(session.replayDir, 'timeline.jsonl'), JSON.stringify(entry) + '\n', { mode: 0o600 });
+    writeSessionManifest(session);
     broadcast(session, { type: 'replay', entry });
   } catch {
     // replay capture is best-effort
@@ -463,6 +735,7 @@ async function captureReplay(session, source, action, extra = {}) {
 async function closeSession(session) {
   if (!session || session.closed) return;
   session.closed = true;
+  writeSessionManifest(session);
   sessions.delete(sessionKey(session.userId, session.surfaceId));
   if (session.replayTimer) clearTimeout(session.replayTimer);
   for (const entry of session.approvals.values()) {
@@ -495,13 +768,26 @@ async function closeSession(session) {
       userBrowsers.delete(session.userId);
     }
   }
-  audit({ userId: session.userId, source: 'system', action: 'session.close', surfaceId: session.surfaceId });
+  audit({
+    userId: session.userId,
+    source: 'system',
+    action: 'session.close',
+    surfaceId: session.surfaceId,
+    conversationId: session.conversationId || null,
+  });
   log('session closed', session.id, 'user', session.userId, 'surface', session.surfaceId);
 }
 
 async function navigate(session, rawUrl, source) {
   const url = validateUrl(rawUrl);
-  audit({ userId: session.userId, source, action: 'navigate', url, surfaceId: session.surfaceId });
+  audit({
+    userId: session.userId,
+    source,
+    action: 'navigate',
+    url,
+    surfaceId: session.surfaceId,
+    conversationId: session.conversationId || null,
+  });
   await session.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   session.lastActive = Date.now();
   await sendState(session);
@@ -708,7 +994,13 @@ function requestApproval(session, tool, args) {
     }, APPROVAL_TIMEOUT_MS);
     session.approvals.set(approval.id, { approval, resolve, timer });
     broadcast(session, { type: 'approval', approval });
-    audit({ userId: session.userId, source: 'system', action: 'approval.request', approval });
+    audit({
+      userId: session.userId,
+      source: 'system',
+      action: 'approval.request',
+      approval,
+      conversationId: session.conversationId || null,
+    });
     void captureReplay(session, 'system', `approval:${tool}`, { approvalId: approval.id });
   });
 }
@@ -720,7 +1012,14 @@ function resolveApproval(session, approvalId, decision) {
   session.approvals.delete(approvalId);
   entry.resolve(decision === 'approve');
   broadcast(session, { type: 'approval_resolved', approvalId, decision });
-  audit({ userId: session.userId, source: 'ui', action: 'approval.resolve', approvalId, decision });
+  audit({
+    userId: session.userId,
+    source: 'ui',
+    action: 'approval.resolve',
+    approvalId,
+    decision,
+    conversationId: session.conversationId || null,
+  });
   return true;
 }
 
@@ -914,6 +1213,11 @@ function serveFile(res, filePath, contentType) {
   });
 }
 
+// Load replay manifests written by previous daemon runs so closed sessions can
+// be listed and replayed without a live browser page. Must run before the
+// server starts accepting requests.
+loadReplayIndex();
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
@@ -928,18 +1232,21 @@ const server = http.createServer(async (req, res) => {
       if (!user) return json(res, 401, { error: 'authentication required' });
       const body = await readJson(req);
       const surfaceId = String(body.surfaceId || 'default');
-      const session = await ensureSession(user.id, surfaceId, 'user');
+      const conversationId = body.conversationId ? String(body.conversationId) : null;
+      const session = await ensureSession(user.id, surfaceId, 'user', conversationId);
       return json(res, 200, {
         sessionId: session.id,
         surfaceId: session.surfaceId,
+        conversationId: session.conversationId,
         wsPath: `/api/browser/ws?session=${encodeURIComponent(session.id)}`,
-        tabs: listSessions(user.id),
+        tabs: listSessions(user.id, conversationId),
       });
     }
     if (req.method === 'GET' && url.pathname === '/api/browser/sessions') {
       const user = await authenticate(req);
       if (!user) return json(res, 401, { error: 'authentication required' });
-      return json(res, 200, { tabs: listSessions(user.id) });
+      const conversationId = url.searchParams.get('conversationId');
+      return json(res, 200, { tabs: listSessions(user.id, conversationId) });
     }
     if (req.method === 'POST' && url.pathname === '/api/browser/close') {
       const user = await authenticate(req);
@@ -961,48 +1268,54 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/browser/replay') {
       const user = await authenticate(req);
       if (!user) return json(res, 401, { error: 'authentication required' });
-      const session = findSession(user.id, String(url.searchParams.get('sessionId') || ''));
-      if (!session) return json(res, 404, { error: 'session not found' });
-      const file = path.join(session.replayDir, 'timeline.jsonl');
-      if (!fs.existsSync(file)) return json(res, 200, { entries: [] });
-      const entries = fs
-        .readFileSync(file, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .slice(-200)
-        .map((line) => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean);
-      return json(res, 200, { entries });
+      const sessionId = url.searchParams.get('sessionId');
+      const conversationId = url.searchParams.get('conversationId');
+      if (!sessionId && !conversationId) {
+        return json(res, 400, { error: 'sessionId or conversationId is required' });
+      }
+      const { dirs, manifests } = resolveReplayDirs(user.id, sessionId, conversationId);
+      if (dirs.length === 0) return json(res, 404, { error: 'session not found' });
+      const entries = dirs.flatMap((dir) => readTimelineEntries(dir, conversationId)).sort((a, b) => a.ts - b.ts);
+      const trimmed = entries.length > 200 ? entries.slice(-200) : entries;
+      return json(res, 200, { entries: trimmed, sessions: manifests });
     }
     if (req.method === 'GET' && url.pathname === '/api/browser/files') {
       const user = await authenticate(req);
       if (!user) return json(res, 401, { error: 'authentication required' });
-      const session = findSession(user.id, String(url.searchParams.get('sessionId') || ''));
-      if (!session) return json(res, 404, { error: 'session not found' });
-      const dir = path.join(DOWNLOAD_DIR, session.id);
-      if (!fs.existsSync(dir)) return json(res, 200, { files: [] });
-      const files = fs
-        .readdirSync(dir)
-        .map((name) => {
-          const stat = fs.statSync(path.join(dir, name));
-          return { name, size: stat.size, mtime: stat.mtimeMs };
-        })
-        .sort((a, b) => b.mtime - a.mtime);
+      const sessionId = url.searchParams.get('sessionId');
+      const conversationId = url.searchParams.get('conversationId');
+      if (!sessionId && !conversationId) {
+        return json(res, 400, { error: 'sessionId or conversationId is required' });
+      }
+      const { dirs } = resolveReplayDirs(user.id, sessionId, conversationId);
+      if (dirs.length === 0) return json(res, 404, { error: 'session not found' });
+      const files = [];
+      for (const dir of dirs) {
+        const downloadDir = path.join(DOWNLOAD_DIR, path.basename(dir));
+        if (!fs.existsSync(downloadDir)) continue;
+        for (const name of fs.readdirSync(downloadDir)) {
+          const stat = fs.statSync(path.join(downloadDir, name));
+          files.push({ name, size: stat.size, mtime: stat.mtimeMs });
+        }
+      }
+      files.sort((a, b) => b.mtime - a.mtime);
       return json(res, 200, { files });
     }
     if (req.method === 'GET' && (url.pathname === '/api/browser/replay/file' || url.pathname === '/api/browser/file')) {
       const user = await authenticate(req);
       if (!user) return json(res, 401, { error: 'authentication required' });
-      const session = findSession(user.id, String(url.searchParams.get('sessionId') || ''));
-      if (!session) return json(res, 404, { error: 'session not found' });
+      const sessionId = String(url.searchParams.get('sessionId') || '');
       const name = safeName(url.searchParams.get('name'));
-      const base = url.pathname === '/api/browser/file' ? path.join(DOWNLOAD_DIR, session.id) : session.replayDir;
+      let base;
+      if (url.pathname === '/api/browser/file') {
+        const session = findSession(user.id, sessionId);
+        if (!session) return json(res, 404, { error: 'session not found' });
+        base = path.join(DOWNLOAD_DIR, session.id);
+      } else {
+        const resolved = resolveReplaySession(user.id, sessionId);
+        if (!resolved) return json(res, 404, { error: 'session not found' });
+        base = resolved.replayDir;
+      }
       const filePath = path.join(base, name);
       if (!filePath.startsWith(base + path.sep)) return json(res, 400, { error: 'invalid file' });
       const contentType = name.endsWith('.png') ? 'image/png' : name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
@@ -1013,8 +1326,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const userId = String(body.user_id || '').trim();
       if (!userId) return json(res, 400, { error: 'user_id is required' });
-      const session = await ensureSession(userId, String(body.surface_id || 'agent'), String(body.owner || 'agent'));
-      return json(res, 200, { sessionId: session.id, surfaceId: session.surfaceId, tabs: listSessions(userId) });
+      const conversationId = body.conversation_id ? String(body.conversation_id) : null;
+      const session = await ensureSession(userId, String(body.surface_id || 'agent'), String(body.owner || 'agent'), conversationId);
+      return json(res, 200, {
+        sessionId: session.id,
+        surfaceId: session.surfaceId,
+        conversationId: session.conversationId,
+        tabs: listSessions(userId, conversationId),
+      });
     }
     if (req.method === 'POST' && url.pathname === '/agent/tool') {
       if (!hasControlToken(req)) return json(res, 403, { error: 'invalid control token' });
@@ -1023,12 +1342,13 @@ const server = http.createServer(async (req, res) => {
       if (!userId) return json(res, 400, { error: 'user_id is required' });
       const tool = String(body.tool || '');
       const args = body.args || {};
+      const conversationId = body.conversation_id ? String(body.conversation_id) : null;
       if (tool === 'tab_list') {
-        return json(res, 200, { ok: true, result: listSessions(userId) });
+        return json(res, 200, { ok: true, result: listSessions(userId, conversationId) });
       }
       if (tool === 'tab_new') {
         const surfaceId = String(args.surfaceId || `agent-${crypto.randomBytes(4).toString('hex')}`);
-        const session = await ensureSession(userId, surfaceId, 'agent');
+        const session = await ensureSession(userId, surfaceId, 'agent', conversationId);
         if (args.url) await navigate(session, args.url, 'agent');
         return json(res, 200, { ok: true, result: meta(session) });
       }

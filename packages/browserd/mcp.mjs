@@ -11,6 +11,7 @@ const TOKEN_FILE =
   process.env.AIONUI_BROWSER_CONTROL_TOKEN_FILE || path.join(os.homedir(), '.aionui-web', 'browser', 'control-token');
 const USER_ID = process.env.AIONUI_USER_ID || '';
 const SURFACE = process.env.AIONUI_BROWSER_SURFACE || 'agent';
+const CONVERSATION_ID = process.env.AIONUI_CONVERSATION_ID || '';
 
 function log(message) {
   process.stderr.write(`[aionui-browser-mcp] ${message}\n`);
@@ -41,7 +42,9 @@ let currentSessionId = process.env.AIONUI_BROWSER_SESSION || '';
 async function ensureSession() {
   if (currentSessionId) return currentSessionId;
   if (!USER_ID) throw new Error('AIONUI_USER_ID is not set');
-  const data = await call('/agent/session', { user_id: USER_ID, surface_id: SURFACE, owner: 'agent' });
+  const body = { user_id: USER_ID, surface_id: SURFACE, owner: 'agent' };
+  if (CONVERSATION_ID) body.conversation_id = CONVERSATION_ID;
+  const data = await call('/agent/session', body);
   currentSessionId = data.sessionId;
   return currentSessionId;
 }
@@ -49,7 +52,9 @@ async function ensureSession() {
 async function callTool(tool, args = {}, sessionId) {
   if (!USER_ID) throw new Error('AIONUI_USER_ID is not set');
   const id = sessionId || (await ensureSession());
-  return call('/agent/tool', { user_id: USER_ID, session_id: id, tool, args });
+  const body = { user_id: USER_ID, session_id: id, tool, args };
+  if (CONVERSATION_ID) body.conversation_id = CONVERSATION_ID;
+  return call('/agent/tool', body);
 }
 
 function textResult(value) {
@@ -213,7 +218,9 @@ async function main() {
 
   server.tool('browser_tabs', 'List all browser sessions/tabs for the current user.', {}, async () => {
     try {
-      const data = await call('/agent/tool', { user_id: USER_ID, tool: 'tab_list', args: {} });
+      const body = { user_id: USER_ID, tool: 'tab_list', args: {} };
+      if (CONVERSATION_ID) body.conversation_id = CONVERSATION_ID;
+      const data = await call('/agent/tool', body);
       return textResult(data.result);
     } catch (error) {
       return errorResult(error);
@@ -226,11 +233,9 @@ async function main() {
     { url: z.string().optional(), surfaceId: z.string().optional() },
     async ({ url, surfaceId }) => {
       try {
-        const data = await call('/agent/tool', {
-          user_id: USER_ID,
-          tool: 'tab_new',
-          args: { url, surfaceId },
-        });
+        const body = { user_id: USER_ID, tool: 'tab_new', args: { url, surfaceId } };
+        if (CONVERSATION_ID) body.conversation_id = CONVERSATION_ID;
+        const data = await call('/agent/tool', body);
         currentSessionId = data.result.sessionId;
         return textResult(data.result);
       } catch (error) {
