@@ -57,10 +57,22 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
 
   const isBrowserActive = browserTabs.some((tab) => tab.id === activeTabId);
 
+  // The agent drives the conversation's browser on the deterministic surface
+  // `agent-<conversationId>` (set by AionCore when it injects the browser MCP).
+  // Binding the primary tab to that same surface is what makes the agent's
+  // navigation visible here: browserd keys sessions by surface, so both the
+  // agent's tool calls and this view attach to one Playwright page. Without it
+  // the tab gets its own `tabId` session — a separate about:blank page — and the
+  // agent's page never appears in the UI.
+  const agentSurfaceId = conversationId ? `agent-${conversationId}` : undefined;
+
   return (
     <div className='relative flex-1 overflow-hidden' style={{ display: isBrowserActive ? undefined : 'none' }}>
-      {browserTabs.map((tab) => {
+      {browserTabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
+        // Only the primary tab shares the agent surface; extra user tabs keep
+        // their own sessions so opening a second tab does not mirror the first.
+        const surfaceId = tab.metadata?.browserSurfaceId ?? (index === 0 ? agentSurfaceId : undefined);
         return (
           <div
             key={tab.id}
@@ -74,7 +86,7 @@ const BrowserTabLayer: React.FC<BrowserTabLayerProps> = ({ browserTabs, activeTa
             <BrowserViewer
               url={tab.content}
               tabId={tab.id}
-              surfaceId={tab.metadata?.browserSurfaceId}
+              surfaceId={surfaceId}
               conversationId={conversationId}
               onUrlChange={handleUrlChange}
               onTitleChange={handleTitleChange}

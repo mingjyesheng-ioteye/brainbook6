@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Left, Right, Refresh, Loading, History, Close } from '@icon-park/react';
+import { Left, Right, Refresh, Loading, History, Close, Play, Pause } from '@icon-park/react';
 import { refreshSession } from '@/common/adapter/sessionRefresh';
 import { usePreviewContext } from '../context/PreviewContext';
 import { BROWSER_BLANK_URL, browserTabLabelFromUrl, resolveAddressBarInput } from './constants';
@@ -100,6 +100,9 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
   const [timeline, setTimeline] = useState<ReplayEntry[]>([]);
   const [files, setFiles] = useState<BrowserFile[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replayingRef = useRef(false);
 
   callbacksRef.current = { onUrlChange, onTitleChange };
 
@@ -123,6 +126,30 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       setLoading(false);
     };
     image.src = `data:image/jpeg;base64,${data}`;
+  }, []);
+
+  const drawScreenshot = useCallback((imageUrl: string) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (canvas.width !== image.width) canvas.width = image.width;
+      if (canvas.height !== image.height) canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      setLoading(false);
+    };
+    image.src = imageUrl;
+  }, []);
+
+  const stopReplay = useCallback(() => {
+    if (replayTimerRef.current) {
+      clearTimeout(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
+    replayingRef.current = false;
+    setReplaying(false);
   }, []);
 
   useEffect(() => {
@@ -175,6 +202,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
             return;
           }
           if (message.type === 'frame') {
+            if (replayingRef.current) return;
             drawFrame(message.data);
             return;
           }
@@ -227,6 +255,11 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       cancelled = true;
       socket?.close();
       if (socketRef.current === socket) socketRef.current = null;
+      if (replayTimerRef.current) {
+        clearTimeout(replayTimerRef.current);
+        replayTimerRef.current = null;
+      }
+      replayingRef.current = false;
     };
   }, [conversationId, drawFrame, effectiveSurfaceId, openBrowserTab, reconnectKey, tabId]);
 
@@ -258,10 +291,11 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
 
   const handleMouseDown = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (replayingRef.current) stopReplay();
       event.currentTarget.focus();
       send({ type: 'mouse', event: 'mousePressed', ...ratios(event), button: 'left', clickCount: 1 });
     },
-    [ratios, send]
+    [ratios, send, stopReplay]
   );
 
   const handleMouseUp = useCallback(
@@ -303,6 +337,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (replayingRef.current) stopReplay();
       event.preventDefault();
       send({
         type: 'key',
@@ -314,7 +349,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
         modifiers: modifiersFor(event),
       });
     },
-    [send]
+    [send, stopReplay]
   );
 
   const handleKeyUp = useCallback(
@@ -386,6 +421,53 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
     });
   }, [loadActivity]);
 
+  const startReplay = useCallback(async () => {
+    if (replayingRef.current) {
+      stopReplay();
+      return;
+    }
+    let entries = timeline.filter((entry) => entry.screenshot);
+    if (entries.length === 0) {
+      if (!sessionId) return;
+      setActivityLoading(true);
+      try {
+        const query = `sessionId=${encodeURIComponent(sessionId)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
+        const replayResponse = await fetch(`/api/browser/replay?${query}`, { credentials: 'include' });
+        const replay = (await replayResponse.json().catch(() => ({ entries: [] as ReplayEntry[] }))) as {
+          entries?: ReplayEntry[];
+        };
+        const loaded = Array.isArray(replay.entries) ? replay.entries : [];
+        setTimeline(loaded);
+        entries = loaded.filter((entry) => entry.screenshot);
+      } finally {
+        setActivityLoading(false);
+      }
+    }
+    if (entries.length === 0) return;
+    replayingRef.current = true;
+    setReplaying(true);
+    let index = 0;
+    const showNext = () => {
+      if (!replayingRef.current) return;
+      const entry = entries[index];
+      if (entry.screenshot) {
+        drawScreenshot(
+          `/api/browser/replay/file?sessionId=${encodeURIComponent(sessionId)}&name=${encodeURIComponent(entry.screenshot)}`
+        );
+      }
+      if (entry.url) setAddress(entry.url);
+      index += 1;
+      if (index >= entries.length) {
+        replayTimerRef.current = setTimeout(() => {
+          stopReplay();
+        }, 800);
+        return;
+      }
+      replayTimerRef.current = setTimeout(showNext, 800);
+    };
+    showNext();
+  }, [timeline, sessionId, conversationId, stopReplay, drawScreenshot]);
+
   const stopBrowser = useCallback(async () => {
     if (!sessionId) return;
     await fetch('/api/browser/close', {
@@ -429,6 +511,14 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
         </button>
         <button type='button' onClick={toggleActivity} className='toolbar-btn icon-btn' title='Activity'>
           <History theme='outline' size={16} />
+        </button>
+        <button
+          type='button'
+          onClick={() => void startReplay()}
+          className='toolbar-btn icon-btn'
+          title={replaying ? 'Stop replay' : 'Replay activity'}
+        >
+          {replaying ? <Pause theme='outline' size={16} /> : <Play theme='outline' size={16} />}
         </button>
         <button type='button' onClick={() => void stopBrowser()} className='toolbar-btn icon-btn' title='Stop browser'>
           <Close theme='outline' size={16} />

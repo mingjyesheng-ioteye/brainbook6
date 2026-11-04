@@ -18,7 +18,7 @@ import { usePreviewContext } from '@renderer/pages/conversation/Preview';
 import { ProjectPanelHost } from '@renderer/components/layout/ProjectPanelHost';
 import { ProjectPanelMobileOverlay } from '@renderer/components/layout/ProjectPanelMobileOverlay';
 import { setCurrentProject, useCurrentProject } from '@renderer/pages/conversation/explorer/currentProjectStore';
-import { setCurrentConversation } from '@renderer/pages/conversation/explorer/currentConversationStore';
+import { setCurrentConversation, useCurrentConversation } from '@renderer/pages/conversation/explorer/currentConversationStore';
 import { useContainerWidth } from '@renderer/pages/conversation/hooks/useContainerWidth';
 import { useProjectExplorerColumnWidth } from '@renderer/hooks/ui/useProjectExplorerColumnWidth';
 import { useResizableSplit } from '@renderer/hooks/ui/useResizableSplit';
@@ -196,6 +196,11 @@ const Layout: React.FC<{
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
   // their reserve. Active only when a project is bound and on desktop.
   const currentProject = useCurrentProject();
+  // The hoisted, project-level preview host lives above the per-conversation
+  // subtree, so it cannot read ConversationContext. Use the module-level store
+  // the conversation route publishes so browser tabs still learn which
+  // conversation they belong to (and can bind to its agent browser surface).
+  const currentConversationId = useCurrentConversation();
   const { containerRef: mainRowRef, containerWidth: mainRowWidth } = useContainerWidth();
   const explorerActive = Boolean(currentProject) && !isMobile;
   const { widthPx: explorerWidthPx, createDragHandle: createExplorerDragHandle } = useProjectExplorerColumnWidth(
@@ -568,7 +573,7 @@ const Layout: React.FC<{
                       lineStyle: { width: '2px' },
                     })}
                   <div className='h-full w-full overflow-hidden'>
-                    <PreviewPanel />
+                    <PreviewPanel conversationId={currentConversationId ?? undefined} />
                   </div>
                 </div>
               )}
