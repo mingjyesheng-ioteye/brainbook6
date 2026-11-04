@@ -31,6 +31,8 @@ type ReplayEntry = {
   screenshot?: string;
   /** Session that captured this entry (may differ from the current tab in a conversation). */
   sessionId?: string;
+  /** browserd surface of the capturing session, so a popup can be reopened in its own tab. */
+  surfaceId?: string;
 };
 type BrowserFile = { name: string; size: number; mtime: number };
 
@@ -82,7 +84,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
   onTitleChange,
 }) => {
   const { t } = useTranslation();
-  const { openBrowserTab } = usePreviewContext();
+  const { openBrowserTab, tabs } = usePreviewContext();
   const effectiveSurfaceId = surfaceId || tabId;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -456,10 +458,25 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
     if (entries.length === 0) return;
     replayingRef.current = true;
     setReplaying(true);
+    // Tabs already on screen must not be duplicated when a cross-session step
+    // is replayed.
+    const openedSurfaces = new Set(
+      tabs
+        .filter((tab) => tab.content_type === 'browser')
+        .map((tab) => tab.metadata?.browserSurfaceId)
+        .filter((value): value is string => Boolean(value))
+    );
     let index = 0;
     const showNext = () => {
       if (!replayingRef.current) return;
       const entry = entries[index];
+      if (entry.surfaceId && entry.surfaceId !== effectiveSurfaceId && !openedSurfaces.has(entry.surfaceId)) {
+        // The recorded step happened in another session (a MAP link opens a
+        // popup). Reopen that tab so replay mirrors the live experience instead
+        // of painting the popup into the current page.
+        openedSurfaces.add(entry.surfaceId);
+        openBrowserTab(entry.url || BROWSER_BLANK_URL, entry.surfaceId);
+      }
       if (entry.screenshot) {
         drawScreenshot(
           `/api/browser/replay/file?sessionId=${encodeURIComponent(entry.sessionId || sessionId)}&name=${encodeURIComponent(entry.screenshot)}`
@@ -476,7 +493,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       replayTimerRef.current = setTimeout(showNext, 800);
     };
     showNext();
-  }, [sessionId, conversationId, stopReplay, drawScreenshot]);
+  }, [sessionId, conversationId, effectiveSurfaceId, openBrowserTab, stopReplay, drawScreenshot, tabs]);
 
   const stopBrowser = useCallback(async () => {
     if (!sessionId) return;

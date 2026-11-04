@@ -128,14 +128,22 @@ function readTimelineEntries(dir, conversationId = null) {
   // The replay directory is named after the session id, so stamp every entry
   // with it. A conversation can span several sessions (a MAP link opens a popup
   // with its own session) and the UI builds screenshot URLs per session, because
-  // the replay-file endpoint resolves paths per session.
+  // the replay-file endpoint resolves paths per session. The surface id lets the
+  // UI reopen a popup in its own tab while replaying.
   const owningSessionId = path.basename(dir);
+  let owningSurfaceId = '';
+  try {
+    owningSurfaceId = JSON.parse(fs.readFileSync(path.join(dir, 'session.json'), 'utf8')).surfaceId || '';
+  } catch {
+    // session.json may be missing on very old replay dirs
+  }
   const entries = [];
   for (const line of fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
     try {
       const entry = JSON.parse(line);
       if (conversationId && entry.conversationId && entry.conversationId !== conversationId) continue;
       if (!entry.sessionId) entry.sessionId = owningSessionId;
+      if (!entry.surfaceId && owningSurfaceId) entry.surfaceId = owningSurfaceId;
       entries.push(entry);
     } catch {
       // ignore malformed lines
