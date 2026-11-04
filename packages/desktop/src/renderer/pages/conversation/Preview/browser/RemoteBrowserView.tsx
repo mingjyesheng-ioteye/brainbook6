@@ -29,6 +29,8 @@ type ReplayEntry = {
   url?: string;
   title?: string;
   screenshot?: string;
+  /** Session that captured this entry (may differ from the current tab in a conversation). */
+  sessionId?: string;
 };
 type BrowserFile = { name: string; size: number; mtime: number };
 
@@ -229,6 +231,10 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
             return;
           }
           if (message.type === 'replay') {
+            // Heartbeats are periodic liveness snapshots (one every 5 s per
+            // connected session); they flood the activity list and the replay
+            // without carrying an action worth reviewing.
+            if (message.entry.action === 'heartbeat') return;
             setTimeline((current) => [...current, message.entry].slice(-200));
             return;
           }
@@ -406,7 +412,8 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       const fileList = (await filesResponse.json().catch(() => ({ files: [] as BrowserFile[] }))) as {
         files?: BrowserFile[];
       };
-      setTimeline(Array.isArray(replay.entries) ? replay.entries : []);
+      const entryList = Array.isArray(replay.entries) ? replay.entries : [];
+      setTimeline(entryList.filter((entry) => entry.action !== 'heartbeat'));
       setFiles(Array.isArray(fileList.files) ? fileList.files : []);
     } finally {
       setActivityLoading(false);
@@ -426,23 +433,26 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       stopReplay();
       return;
     }
-    let entries = timeline.filter((entry) => entry.screenshot);
-    if (entries.length === 0) {
-      if (!sessionId) return;
-      setActivityLoading(true);
-      try {
-        const query = `sessionId=${encodeURIComponent(sessionId)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
-        const replayResponse = await fetch(`/api/browser/replay?${query}`, { credentials: 'include' });
-        const replay = (await replayResponse.json().catch(() => ({ entries: [] as ReplayEntry[] }))) as {
-          entries?: ReplayEntry[];
-        };
-        const loaded = Array.isArray(replay.entries) ? replay.entries : [];
-        setTimeline(loaded);
-        entries = loaded.filter((entry) => entry.screenshot);
-      } finally {
-        setActivityLoading(false);
-      }
+    if (!sessionId) return;
+    // Always refetch. WebSocket replay events only cover this tab's session, so
+    // a locally accumulated timeline silently misses other sessions in the same
+    // conversation — a MAP link opens a popup with its own session — and can be
+    // stale by the time replay is pressed. The API, given conversationId, merges
+    // every session's timeline.
+    setActivityLoading(true);
+    let loaded: ReplayEntry[] = [];
+    try {
+      const query = `sessionId=${encodeURIComponent(sessionId)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
+      const replayResponse = await fetch(`/api/browser/replay?${query}`, { credentials: 'include' });
+      const replay = (await replayResponse.json().catch(() => ({ entries: [] as ReplayEntry[] }))) as {
+        entries?: ReplayEntry[];
+      };
+      loaded = Array.isArray(replay.entries) ? replay.entries : [];
+      setTimeline(loaded.filter((entry) => entry.action !== 'heartbeat'));
+    } finally {
+      setActivityLoading(false);
     }
+    const entries = loaded.filter((entry) => entry.screenshot && entry.action !== 'heartbeat');
     if (entries.length === 0) return;
     replayingRef.current = true;
     setReplaying(true);
@@ -452,7 +462,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       const entry = entries[index];
       if (entry.screenshot) {
         drawScreenshot(
-          `/api/browser/replay/file?sessionId=${encodeURIComponent(sessionId)}&name=${encodeURIComponent(entry.screenshot)}`
+          `/api/browser/replay/file?sessionId=${encodeURIComponent(entry.sessionId || sessionId)}&name=${encodeURIComponent(entry.screenshot)}`
         );
       }
       if (entry.url) setAddress(entry.url);
@@ -466,7 +476,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
       replayTimerRef.current = setTimeout(showNext, 800);
     };
     showNext();
-  }, [timeline, sessionId, conversationId, stopReplay, drawScreenshot]);
+  }, [sessionId, conversationId, stopReplay, drawScreenshot]);
 
   const stopBrowser = useCallback(async () => {
     if (!sessionId) return;
@@ -621,7 +631,7 @@ const RemoteBrowserView: React.FC<RemoteBrowserViewProps> = ({
                     {entry.url && <div className='truncate text-t-primary'>{entry.url}</div>}
                     {entry.screenshot && (
                       <img
-                        src={`/api/browser/replay/file?sessionId=${encodeURIComponent(sessionId)}&name=${encodeURIComponent(entry.screenshot)}`}
+                        src={`/api/browser/replay/file?sessionId=${encodeURIComponent(entry.sessionId || sessionId)}&name=${encodeURIComponent(entry.screenshot)}`}
                         alt=''
                         className='w-full mt-4px rd-4px border border-border-1'
                       />

@@ -125,11 +125,17 @@ function loadReplayIndex() {
 function readTimelineEntries(dir, conversationId = null) {
   const file = path.join(dir, 'timeline.jsonl');
   if (!fs.existsSync(file)) return [];
+  // The replay directory is named after the session id, so stamp every entry
+  // with it. A conversation can span several sessions (a MAP link opens a popup
+  // with its own session) and the UI builds screenshot URLs per session, because
+  // the replay-file endpoint resolves paths per session.
+  const owningSessionId = path.basename(dir);
   const entries = [];
   for (const line of fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
     try {
       const entry = JSON.parse(line);
       if (conversationId && entry.conversationId && entry.conversationId !== conversationId) continue;
+      if (!entry.sessionId) entry.sessionId = owningSessionId;
       entries.push(entry);
     } catch {
       // ignore malformed lines
@@ -1275,7 +1281,14 @@ const server = http.createServer(async (req, res) => {
       }
       const { dirs, manifests } = resolveReplayDirs(user.id, sessionId, conversationId);
       if (dirs.length === 0) return json(res, 404, { error: 'session not found' });
-      const entries = dirs.flatMap((dir) => readTimelineEntries(dir, conversationId)).sort((a, b) => a.ts - b.ts);
+      const entries = dirs
+        .flatMap((dir) => readTimelineEntries(dir, conversationId))
+        // Heartbeat snapshots exist only to show liveness. They outnumber real
+        // actions by orders of magnitude and would push the interesting steps
+        // (a click that opens a MAP popup, for instance) out of the 200-entry
+        // window, so trim them before applying the cap.
+        .filter((entry) => entry.action !== 'heartbeat')
+        .sort((a, b) => a.ts - b.ts);
       const trimmed = entries.length > 200 ? entries.slice(-200) : entries;
       return json(res, 200, { entries: trimmed, sessions: manifests });
     }
