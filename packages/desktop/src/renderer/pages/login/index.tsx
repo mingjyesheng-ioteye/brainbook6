@@ -36,6 +36,8 @@ const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { status, login, continueWithoutBrainbook } = useAuth();
+  const brandName =
+    window.location.hostname === 'sbpro.ioteyeinc.com' ? 'SpringBoard Pro' : t('login.brand');
   const canContinueWithoutBrainbook = Boolean(window.electronAPI);
 
   const [username, setUsername] = useState('');
@@ -245,9 +247,9 @@ const LoginPage: React.FC = () => {
 
         <div className='login-page__header'>
           <div className='login-page__logo'>
-            <img src={loginLogo} alt={t('login.brand')} />
+            <img src={loginLogo} alt={brandName} />
           </div>
-          <h1 className='login-page__title'>{t('login.brand')}</h1>
+          <h1 className='login-page__title'>{brandName}</h1>
           <p className='login-page__subtitle'>{t('login.subtitle')}</p>
         </div>
 
