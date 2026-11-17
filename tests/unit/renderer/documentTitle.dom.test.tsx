@@ -29,6 +29,12 @@ describe('titleForPath', () => {
     expect(titleForPath('/conversation/abc', t)).toBe('AionUi');
     expect(titleForPath('/settings/agent', t)).toBe('AionUi');
   });
+
+  it('uses the SpringBoard Pro title on its production hostname', () => {
+    expect(titleForPath('/login', t, 'sbpro.ioteyeinc.com')).toBe('SpringBoard Pro');
+    expect(titleForPath('/guid', t, 'sbpro.ioteyeinc.com')).toBe('SpringBoard Pro');
+    expect(titleForPath('/guid', t, 'localhost')).toBe('AionUi');
+  });
 });
 
 describe('DocumentTitle', () => {

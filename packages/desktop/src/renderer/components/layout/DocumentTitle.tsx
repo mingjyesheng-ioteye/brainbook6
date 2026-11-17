@@ -17,7 +17,12 @@ import { useTranslation } from 'react-i18next';
  * it here from the route and the app language keeps it correct across both
  * navigation and language switches.
  */
-export function titleForPath(pathname: string, t: (key: string) => string): string {
+export function titleForPath(
+  pathname: string,
+  t: (key: string) => string,
+  hostname = ''
+): string {
+  if (hostname === 'sbpro.ioteyeinc.com') return 'SpringBoard Pro';
   return pathname.startsWith('/login') ? t('login.pageTitle') : 'AionUi';
 }
 
@@ -26,7 +31,7 @@ const DocumentTitle: React.FC = () => {
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
-    document.title = titleForPath(pathname, t);
+    document.title = titleForPath(pathname, t, window.location.hostname);
   }, [pathname, t, i18n.language]);
 
   return null;
