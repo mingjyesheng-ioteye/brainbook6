@@ -1,4 +1,5 @@
 import loginLogo from '@renderer/assets/logo.svg';
+import springBoardLogo from '@renderer/assets/springboard-pro.svg';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
@@ -36,8 +37,8 @@ const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { status, login, continueWithoutBrainbook } = useAuth();
-  const brandName =
-    window.location.hostname === 'sbpro.ioteyeinc.com' ? 'SpringBoard Pro' : t('login.brand');
+  const isSpringBoardPro = window.location.hostname === 'sbpro.ioteyeinc.com';
+  const brandName = isSpringBoardPro ? 'SpringBoard Pro' : t('login.brand');
   const canContinueWithoutBrainbook = Boolean(window.electronAPI);
 
   const [username, setUsername] = useState('');
@@ -247,7 +248,7 @@ const LoginPage: React.FC = () => {
 
         <div className='login-page__header'>
           <div className='login-page__logo'>
-            <img src={loginLogo} alt={brandName} />
+            <img src={isSpringBoardPro ? springBoardLogo : loginLogo} alt={brandName} />
           </div>
           <h1 className='login-page__title'>{brandName}</h1>
           <p className='login-page__subtitle'>{t('login.subtitle')}</p>
